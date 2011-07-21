@@ -154,6 +154,7 @@ Includes the contents of C<file> at the current source location.
 =item @perl_begin ... @perl_end
 
 Usage: 
+
   @perl_begin
   # any number of lines of perl code
   @perl_end
@@ -211,6 +212,7 @@ Ends a chain of conditional sections.
 =item @Module
 
 Usage:
+
   @Module [-v2k] [module_identifier] ;
 
 The C<@Module> directive introduces a module. If the C<module_identifier> is
@@ -234,6 +236,7 @@ will include ports explicitly defined in the source and any inferred ports.
 =item @Ports
 
 Usage:
+
   @Ports;
 
 The C<@Ports> directive generates port declarations for any signals used in the
@@ -246,6 +249,7 @@ module header; C<@Ports> should not be used.
 =item @Regs, @Wires
 
 Usage:
+
   @Regs;
   @Wires;
 
@@ -256,6 +260,7 @@ automatically based on usage.
 =item @Input, @Output
 
 Usage:
+
   @Input signal_identifier;
   @Output signal_identifier;
 
@@ -271,6 +276,7 @@ coded explicitly.
 =item @Waive
 
 Usage:
+
   @Waive no_source signal_identifier;
   @Waive no_sink signal_identifier;
 
@@ -279,6 +285,7 @@ The C<@Waive> directive inhibits connectivity errors for the specified signals.
 =item @Vector
 
 Usage:
+
   @Vector size signal_identifier;
 
 The C<@Vector> directive specifies the size of the specified signal. The size
@@ -288,6 +295,7 @@ size must be a decimal number; the signal range will be [size-1:0].
 =item @Unparsed
 
 Usage:
+
   @Unparsed begin;
   // unsupported Verilog constructs
   @Unparsed end;
@@ -301,6 +309,7 @@ VP3 directive expansion will be performed on the unparsed section.
 =item @Instance
 
 Usage:
+
   @Instance [-file instance.v] instance instance_name
     -connect instance_portA     connectionA
     -connect instance_portB     connectionB
@@ -348,6 +357,8 @@ generate blocks are only partially supported
 =item *
 
 big-endian vectors
+
+=back
 
 =head1 AUTHOR
 
