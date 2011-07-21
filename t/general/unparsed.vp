@@ -1,0 +1,26 @@
+@Module ;
+
+@Ports ;
+@Wires ;
+
+always @(posedge clk) q <= d;
+
+// These would be syntax errors
+
+@Unparsed begin;
+    w1 = w0;
+@Unparsed end;
+
+  @Unparsed begin;
+    w3 = w2;
+  @Unparsed end;
+
+@Unparsed begin;
+    w5 = w4;
+  @Unparsed end;
+
+  @Unparsed begin;
+    w7 = w6;
+@Unparsed end;
+
+endmodule

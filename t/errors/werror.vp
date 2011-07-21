@@ -1,0 +1,7 @@
+@Module;
+
+output o;
+
+assign o = i;
+
+endmodule

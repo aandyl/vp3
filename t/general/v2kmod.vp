@@ -1,0 +1,5 @@
+@Module -v2k v2kmod;
+
+assign out = in;
+
+endmodule

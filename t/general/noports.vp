@@ -1,0 +1,23 @@
+@Module noports1;
+
+input a;
+output b;
+
+@Regs ;
+@Wires ;
+
+assign b = a;
+assign d = c;
+
+endmodule
+
+@Module -v2k noports2;
+
+@Regs ;
+@Wires ;
+
+assign b = a;
+assign d = c;
+
+endmodule
+

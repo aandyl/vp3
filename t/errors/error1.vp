@@ -1,0 +1,19 @@
+@Module top;
+
+@Ports;
+
+@Wires;
+
+sub_internal sub0 (.o(o0), .i(i0), .a(a0));
+
+sub sub1 (.o(o0), .i(i0), .a(a0));
+
+endmodule
+
+@Module sub_internal;
+
+@Ports;
+
+assign o = i;
+
+endmodule

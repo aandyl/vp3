@@ -1,0 +1,49 @@
+VP3 is a tool to assist in the description of a hardware design in Verilog. VP3
+can generate module instantations and signal declarations for you. It provides
+a preprocessor function comparable to the C preprocessor, and allows you to
+generate portions of your Verilog with embedded perl code.
+
+
+INSTALLATION
+
+The Parse::Yapp module (available on CPAN) must be installed prior to installing
+VP3. If you wish to use the EP3 preprocessor, the Text::EP3 module must be
+installed.
+
+If you wish to run the test suite with "make test", Icarus Verilog must be
+installed.
+
+VP3 follows the usual perl module install procedure:
+
+	perl Makefile.PL
+	make
+	make test (optional)
+	make install
+
+Documentation can be found in Pod format in the main vp3 program.
+
+
+LICENSE AND COPYRIGHT
+
+Copyright 2010, 2011 Andrew Leiserson <andy@leiserson.org>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation and/or
+   other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

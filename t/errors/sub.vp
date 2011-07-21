@@ -1,0 +1,7 @@
+@Module;
+
+@Ports;
+
+assign o = i;
+
+endmodule

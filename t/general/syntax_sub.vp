@@ -1,0 +1,12 @@
+module syntax_sub (
+      output reg [1:0] oport
+    , input [1:0] iport
+);
+
+// For hier. ref test
+reg dummy1;
+reg [1:0] dummy2;
+
+always @(*) oport = iport;
+
+endmodule

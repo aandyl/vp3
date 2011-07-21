@@ -1,0 +1,15 @@
+@Module;
+
+@Ports;
+
+wire (weak0, strong1) wire0 = src0;
+trireg (small) wire1;
+assign wire1 = src1;
+
+wire wire2;
+assign (pull0, supply1) #(1,2,3) wire2 = src2;
+
+wire wire3;
+assign #4 wire3 = src3;
+
+endmodule

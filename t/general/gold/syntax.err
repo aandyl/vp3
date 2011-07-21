@@ -1,0 +1,5 @@
+WARNING: Signal test5 has no source
+WARNING: Signal \$escaped3 has no sink
+WARNING: Signal \escaped(1) has no sink
+WARNING: Signal \escaped[2] has no sink
+WARNING: Signal no_implicit_decl_2 has no sink

@@ -1,0 +1,7 @@
+@Module ;
+
+@Ports ;
+
+@Instance -file wrongname.v misnamed m ;
+
+endmodule

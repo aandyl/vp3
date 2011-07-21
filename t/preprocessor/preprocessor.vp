@@ -1,0 +1,25 @@
+@include "common.vh"
+
+@define MACRO1 m1val
+@define MACRO2 m2val
+
+// Should not be expanded: MACRO1
+
+/* Should not be expanded:
+ * MACRO2
+ */
+
+/* Should not be evaluated:
+
+   @perl_begin
+       vprint "test\n";
+   @perl_end
+ */
+
+@Module;
+
+@Ports;
+
+  @mux a b s q
+
+endmodule

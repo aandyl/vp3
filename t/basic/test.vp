@@ -1,0 +1,15 @@
+@define EM endmodule
+
+module test (a, b, c, d);
+
+@Ports ;
+
+@Instance subA subA0 ;
+
+@Instance subB subB0 ;
+
+assign b = a;
+assign c = a;
+assign d = a;
+
+EM

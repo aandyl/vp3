@@ -1,0 +1,29 @@
+
+@Module ;
+
+@Ports ;
+
+@Regs ;
+
+`ifdef SYNTHESIS
+    assign synthesis_defined = 1'b1;
+    assign `SYNTHESIS = 1'b1;
+`else
+    assign synthesis_undef = 1'b1;
+`endif
+
+`ifndef BUGABOO
+    assign bugaboo_undef = 1'b1;
+`else
+    assign bugaboo_defined = 1'b1;
+`endif
+
+`undef BUGABOO
+
+`ifndef BUGABOO
+    assign bugaboo_undef2 = 1'b1;
+`else
+    assign bugaboo_defined2 = 1'b1;
+`endif
+
+endmodule

@@ -1,0 +1,28 @@
+@Module sub1;
+
+@Ports;
+
+assign o1 = i1;
+
+endmodule
+
+
+@Module top;
+
+@Ports;
+@Wires;
+
+@Instance sub1 sub10;
+
+@Instance sub2 sub20;
+
+endmodule
+
+
+@Module sub2;
+
+@Ports;
+
+assign o2 = i2;
+
+endmodule
