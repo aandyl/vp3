@@ -1204,8 +1204,8 @@ msb_constant_expression : constant_expression;
 #                  ;
 
 range_expression_colon:   msb_constant_expression ':' lsb_constant_expression { f ("range_expression_colon", @_[1..$#_]) }
-                        | base_expression '+:' width_constant_expression {d(@_)}
-                        | base_expression '-:' width_constant_expression {d(@_)}
+                        | base_expression '+:' width_constant_expression { f ("range_expression_colon", @_[1..$#_]) }
+                        | base_expression '-:' width_constant_expression { f ("range_expression_colon", @_[1..$#_]) }
                         ;
 
 width_constant_expression: constant_expression;

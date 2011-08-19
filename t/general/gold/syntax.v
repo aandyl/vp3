@@ -35,6 +35,7 @@ module syntax (
 reg  test6;
 //|@Wires ;
 wire [15:0] foo;
+wire [7:0] range0;
 
 //|@Vector 16 foo;
 //|@Vector 4 bar;
@@ -57,6 +58,19 @@ wire num2 = 4'd1_2;
 
 //|@Waive no_sink num1;
 //|@Waive no_sink num2;
+
+// +: and -: ranges
+
+//|@Vector 8 range0;
+
+wire [3:0] range1 = range0[4+:4];
+wire [3:0] range2 = range0[3-:4];
+
+assign range0 = 8'h00;
+//|@Waive no_sink range1;
+//|@Waive no_sink range2;
+
+//
 
 assign foo = {16{quux}} & {4{bar[3:0]}};
 

@@ -767,16 +767,11 @@ sub VP3::Preprocessor::standard::_eval
         } elsif ($range->typeis ("range_expression_colon")) {
             # MSB:LSB range specification
 
-            my $colon = $range->children->[1]->emit_self;
-            my $msb = $range->children->[0]->emit_self;
-            my $lsb = $range->children->[2]->emit_self;
-            #$msb =~ /^\d+$/ or die "Unsupported complex expression in range: $msb"; # !!!
-            #$lsb =~ /^\d+$/ or die "Unsupported complex expression in range: $lsb";
-            # !!! support other ranges
-            if ($colon eq ":" && $msb =~ /^\d+$/ && $lsb =~ /^\d+$/) {
-                $conn->msb ($msb);
-                $conn->lsb ($lsb);
-            }
+            my $msb = $range->evaluate_msb (undef);
+            my $lsb = $range->evaluate_lsb (undef);
+
+            $conn->msb ($msb);
+            $conn->lsb ($lsb);
         } elsif ($range->typeis ("identifier") || $range->typeis ("identifier_subscripts")) {
             my $saved_source_type = $self->{source_type};
             my $saved_direction   = $self->{direction};
@@ -891,11 +886,9 @@ sub VP3::Preprocessor::standard::_eval
             } elsif ($range->typeis ("range_expression_colon")) {
                 # MSB:LSB range specification
 
-                $range->children->[1]->emit_self eq ":" or die "!!!";
-                my $hiconn_msb = $range->children->[0]->emit_self;
-                my $hiconn_lsb = $range->children->[2]->emit_self;
-                $hiconn_msb =~ /^\d+$/ or die "Unsupported complex expression in range: $hiconn_msb"; # !!!
-                $hiconn_lsb =~ /^\d+$/ or die "Unsupported complex expression in range: $hiconn_lsb";
+                my $hiconn_msb = $range->evaluate_msb (undef);
+                my $hiconn_lsb = $range->evaluate_lsb (undef);
+
                 defined ($hiconn_msb) && defined ($loconn_msb) && defined ($hiconn_lsb) && defined ($loconn_lsb)
                     or do { no warnings 'uninitialized'; die "Undefined range value in connection of $ident, hiconn $hiconn_msb:$hiconn_lsb, loconn $loconn_msb:$loconn_lsb"; }; # !!!
 
@@ -1041,6 +1034,7 @@ sub VP3::Preprocessor::standard::_eval
 
         $op eq '+' && return $lval + $rval;
         $op eq '-' && return $lval - $rval;
+        $op eq '*' && return $lval * $rval;
 
         die "Binary op $op not supported for expression evaluation";
     }
@@ -2311,6 +2305,66 @@ sub VP3::Preprocessor::standard::_eval
 
     sub msb { $_[0]->children->[MSB] }
     sub lsb { $_[0]->children->[LSB] }
+}
+
+{
+    package VP3::ParseTree::range_expression_colon;
+    use base 'VP3::ParseTree';
+
+    use constant {
+        LHS   => 0,
+        COLON => 1,
+        RHS   => 2,
+    };
+
+    sub new
+    {
+        my $class = shift;
+        my $self = $class->SUPER::new (@_);
+    }
+
+    sub evaluate_msb
+    {
+        my ($self, $scope) = @_;
+
+        my $colon = $self->children->[COLON]->emit_self;
+
+        if ($colon eq ":") {
+            return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
+        } elsif ($colon eq "+:") {
+            # is this right for big-endian?
+            return VP3::Expression::evaluate ($scope, $self->children->[LHS]) +
+                   VP3::Expression::evaluate ($scope, $self->children->[RHS]) - 1;
+        } elsif ($colon eq "-:") {
+            # ditto the big-endian question
+            return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
+        } else {
+            # the parser shouldn't have produced anything else
+            VP3::fatal ("Illegal colon token `" . $colon . "' in range_expression_colon");
+        }
+    }
+
+    sub evaluate_lsb
+    {
+        my ($self, $scope) = @_;
+
+        my $colon = $self->children->[COLON]->emit_self;
+
+        if ($colon eq ":") {
+            return VP3::Expression::evaluate ($scope, $self->children->[RHS]);
+        } elsif ($colon eq "+:") {
+            # is this right for big-endian?
+            return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
+        } elsif ($colon eq "-:") {
+            # ditto the big-endian question
+            return VP3::Expression::evaluate ($scope, $self->children->[LHS]) -
+                   VP3::Expression::evaluate ($scope, $self->children->[RHS]) + 1;
+        } else {
+            # the parser shouldn't have produced anything else
+            VP3::fatal ("Illegal colon token `" . $colon . "' in range_expression_colon");
+        }
+    }
+
 }
 
 {

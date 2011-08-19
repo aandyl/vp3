@@ -1,6 +1,6 @@
-WARNING: ranges.vp:16: range mismatch in connection for port `vector_o'
-         range in submod is [15:0]
+WARNING: ranges.vp:14: range mismatch in connection for port `vector_o'
+         range in subA is [15:0]
          connected to s1_hiconn_toobig_explicit with range [16:0]
-WARNING: ranges.vp:29: range mismatch in connection for port `vector_o'
-         range in submod is [15:0]
+WARNING: ranges.vp:25: range mismatch in connection for port `vector_o'
+         range in subA is [15:0]
          connected to s2_hiconn_toosmall_explicit with range [14:0]

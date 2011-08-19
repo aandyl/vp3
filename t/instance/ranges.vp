@@ -2,37 +2,56 @@
 
 @Wires;
 
-@Instance submod s0
+@Instance subA s0
     -connect vector_i s0_hiconn_slice[31:16]
     -connect vector_o s0_hiconn_slice[15:0]
-    -connect scalar_i s0_scalar_i
-    -connect scalar_o s0_scalar_o
 ;
 
 //
 
 @Vector 17 s1_hiconn_toobig_implicit;
 
-@Instance submod s1
+@Instance subA s1
     // no warning, but maybe should be
     -connect vector_i s1_hiconn_toobig_implicit
     // warning
     -connect vector_o s1_hiconn_toobig_explicit[16:0]
-    -connect scalar_i s1_scalar_i
-    -connect scalar_o s1_scalar_o
 ;
 
 //
 
 @Vector 15 s2_hiconn_toosmall_implicit;
 
-@Instance submod s2
+@Instance subA s2
     // no warning, but maybe should be
     -connect vector_i s2_hiconn_toosmall_implicit
     // warning
     -connect vector_o s2_hiconn_toosmall_explicit[14:0]
-    -connect scalar_i s2_scalar_i
-    -connect scalar_o s2_scalar_o
 ;
+
+//
+
+@Instance subB s3
+    -connect vector_i s3_vector_i
+    -connect vector_o s3_vector_o
+;
+
+endmodule
+
+@Module -v2k subA;
+
+@Vector 16 vector_i;
+@Vector 16 vector_o;
+
+assign vector_o = vector_i;
+
+endmodule
+
+module subB (
+    input [2*16-1:0] vector_i,
+    output [15:0] vector_o
+);
+    
+assign vector_o = vector_i[0+:16] ^ vector_i[16+:16];
 
 endmodule
