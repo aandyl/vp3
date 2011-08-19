@@ -148,9 +148,10 @@ description:   module_declaration
 module_preamble:   attr                                  # 1
                    module_keyword                        # 2
                    module_identifier                     # 3
+                   opt_module_parameter_port_list        # 4
                    {
                        $_[2]->prepend_text ($_[1]);
-                       my $obj = f ("module_declaration", @_[2,3]);
+                       my $obj = f ("module_declaration", @_[2,3,4]);
                        $_[0]->scope ($obj);
                        $obj;
                    }
@@ -209,6 +210,21 @@ module_declaration:   traditional_module_header             # 1
 module_keyword: 'module' | 'macromodule' ;
 
 # 1.4 Module Parameters and Ports
+
+pdp_parameter_declarations:   pdp_parameter_declaration                            { f ("list_of_parameter_declarations", $_[1]) }
+                            | pdc_parameter_declarations pdp_parameter_declaration { $_[1]->append_children ($_[2]) }
+                            ;
+
+pdc_parameter_declarations:   pdc_parameter_declaration                            { f ("list_of_parameter_declarations", $_[1]) }
+                            | pdc_parameter_declarations pdc_parameter_declaration { $_[1]->append_children ($_[2]) }
+                            ;
+
+opt_module_parameter_port_list:   { null }
+                                | module_parameter_port_list
+                                ;
+
+module_parameter_port_list: '#' '(' pdp_parameter_declarations { $_[3]->prepend_text ($_[2])->prepend_text ($_[1]); $_[3] }
+                            ;
 
 list_of_port_declarations:   ')'                                        { f ("list_of_port_declarations", "")->append_text ($_[1]) }
                            | pip_port_declaration                       { f ("list_of_port_declarations", $_[1])                   }
@@ -276,12 +292,15 @@ non_port_module_items:   non_port_module_item { VP3::ParseTree->factory ("module
                        | non_port_module_items non_port_module_item { $_[1]->append_children ($_[2]) }
                        ;
 
+# The spec has a semicolon after parameter_declaration and
+# local_parameter_declaration here. We consume the semicolon within the rules
+# for shift/reduce conflict avoidance.
 non_port_module_item:   module_or_generate_item
                       | specify_block
                       | generated_instantiation
-                      | attr local_parameter_declaration  { $_[2]->prepend_text ($_[1]) }
-                      | attr parameter_declaration        { $_[2]->prepend_text ($_[1]) }
-                      | attr specparam_declaration        { $_[2]->prepend_text ($_[1]) }
+                      | attr local_parameter_declaration     { $_[2]->prepend_text ($_[1]) }
+                      | attr pds_parameter_declaration       { $_[2]->prepend_text ($_[1]) }
+                      | attr specparam_declaration           { $_[2]->prepend_text ($_[1]) }
                       ;
 
 parameter_override: 'defparam' list_of_defparam_assignments ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]); f ("parameter_override", $_[2]) }
@@ -293,49 +312,75 @@ parameter_override: 'defparam' list_of_defparam_assignments ';' { $_[2]->prepend
 
 # 2.1.1 Module parameter declarations
 
-# This could be consolidated, right now it mirrors the spec.
+# Perhaps these could be consolidated somehow?
 
 local_parameter_declaration:   'localparam'                 # 1
                                opt_signed                   # 2
                                opt_range                    # 3
-                               list_of_param_assignments    # 4
-                               ';'                          # 5
+                               pas_param_assignments        # 4
                                {
                                    $_[2]->prepend_text ($_[1]);
-                                   $_[4]->append_text ($_[5]);
                                    $_[0]->decl (f ("parameter_declaration", "localparam", @_[2,3,4]));
                                }
                              | 'localparam'                 # 1
                                parameter_type               # 2
-                               list_of_param_assignments    # 3
-                               ';'                          # 4
+                               pas_param_assignments        # 3
                                {
                                    $_[2]->prepend_text ($_[1]);
-                                   $_[3]->append_text ($_[4]);
                                    $_[0]->decl (f ("parameter_declaration", "localparam", $_[2], null, $_[3]));
                                }
                              ;
 
-parameter_declaration:   'parameter'                  # 1
-                         opt_signed                   # 2
-                         opt_range                    # 3
-                         list_of_param_assignments    # 4
-                         ';'                          # 5
-                         {
-                             $_[2]->prepend_text ($_[1]);
-                             $_[4]->append_text ($_[5]);
-                             $_[0]->decl (f ("parameter_declaration", "parameter", @_[2,3,4]));
-                         }
-                       | 'parameter'                  # 1
-                         parameter_type               # 2
-                         list_of_param_assignments    # 3
-                         ';'                          # 4
-                         {
-                             $_[2]->prepend_text ($_[1]);
-                             $_[3]->append_text ($_[4]);
-                             $_[0]->decl (f ("parameter_declaration", "parameter", $_[2], null, $_[3]));
-                         }
-                       ;
+pdc_parameter_declaration:   'parameter'                  # 1
+                             opt_signed                   # 2
+                             opt_range                    # 3
+                             pac_param_assignments        # 4
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", @_[2,3,4]));
+                             }
+                           | 'parameter'                  # 1
+                             parameter_type               # 2
+                             pac_param_assignments        # 3
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", $_[2], null, $_[3]));
+                             }
+                           ;
+
+pdp_parameter_declaration:   'parameter'                  # 1
+                             opt_signed                   # 2
+                             opt_range                    # 3
+                             pap_param_assignments        # 4
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", @_[2,3,4]));
+                             }
+                           | 'parameter'                  # 1
+                             parameter_type               # 2
+                             pap_param_assignments        # 3
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", $_[2], null, $_[3]));
+                             }
+                           ;
+
+pds_parameter_declaration:   'parameter'                  # 1
+                             opt_signed                   # 2
+                             opt_range                    # 3
+                             pas_param_assignments        # 4
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", @_[2,3,4]));
+                             }
+                           | 'parameter'                  # 1
+                             parameter_type               # 2
+                             pas_param_assignments        # 3
+                             {
+                                 $_[2]->prepend_text ($_[1]);
+                                 $_[0]->decl (f ("parameter_declaration", "parameter", $_[2], null, $_[3]));
+                             }
+                           ;
 
 specparam_declaration: 'specparam' opt_range list_of_specparam_assignments ';' {d(@_)}
                      ;
@@ -560,9 +605,30 @@ list_of_port_identifiers:   port_identifier { VP3::ParseTree->factory ("list_of_
                           | list_of_port_identifiers ',' port_identifier { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
                           ;
 
-list_of_param_assignments:   param_assignment                               { f ("list_of_param_assignments", $_[1]) }
-                           | list_of_param_assignments ',' param_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
-                           ;
+pac_param_assignment: param_assignment ',' { $_[1]->append_text ($_[2]) }
+                      ;
+
+pac_param_assignments:   pac_param_assignment                       { f ("list_of_param_assignments", $_[1]) }
+                       | pac_param_assignments pac_param_assignment { $_[1]->append_children ($_[2]) }
+                       ;
+
+pap_param_assignment: param_assignment ')' { $_[1]->append_text ($_[2]) }
+                      ;
+
+pap_param_assignments:   pap_param_assignment                       { f ("list_of_param_assignments", $_[1]) }
+                       | pac_param_assignments pap_param_assignment { $_[1]->append_children ($_[2]) }
+                       ;
+
+pas_param_assignment: param_assignment ';' { $_[1]->append_text ($_[2]) }
+                      ;
+
+pas_param_assignments:   pas_param_assignment                       { f ("list_of_param_assignments", $_[1]) }
+                       | pac_param_assignments pas_param_assignment { $_[1]->append_children ($_[2]) }
+                       ;
+
+#list_of_param_assignments:   param_assignment                               { f ("list_of_param_assignments", $_[1]) }
+#                           | list_of_param_assignments ',' param_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
+#                           ;
 
 list_of_real_identifiers: real_type
                         | list_of_real_identifiers ',' real_type {d(@_)}
@@ -772,14 +838,17 @@ block_item_declarations:   block_item_declaration                           { f 
                          | block_item_declarations block_item_declaration   { list (@_[1,2]) }
                          ;
 
+# The spec has a semicolon after parameter_declaration and
+# local_parameter_declaration here. We consume the semicolon within the rules
+# for shift/reduce conflict avoidance.
 block_item_declaration:   attr 'reg' opt_signed opt_range list_of_block_variable_identifiers ';' {d(@_)}
                         | attr 'integer' list_of_block_variable_identifiers ';' {d(@_)}
                         | attr 'time' list_of_block_variable_identifiers ';' {d(@_)}
                         | attr 'real' list_of_block_real_identifiers ';' {d(@_)}
                         | attr 'realtime' list_of_block_real_identifiers ';' {d(@_)}
                         | attr event_declaration {d(@_)}
-                        | attr local_parameter_declaration ';' {d(@_)}
-                        | attr parameter_declaration ';' {d(@_)}
+                        | attr local_parameter_declaration {d(@_)}
+                        | attr pds_parameter_declaration {d(@_)}
                         ;
 
 list_of_block_variable_identifiers:   block_variable_type                                        { f ("list_of_block_variable_identifiers", $_[1]); }
@@ -804,8 +873,6 @@ block_real_type: real_identifier opt_dimensions {d(@_)}
 
 # 4.1 Module instantiation
 
-# TODO parameter value assignment
-
 opt_parameter_value_assignment:   { null }
                                 | parameter_value_assignment
                                 ;
@@ -820,8 +887,8 @@ list_of_parameter_assignments:   ordered_parameter_assignments
 ordered_parameter_assignments:   expressions
                                ;
 
-named_parameter_assignments:   named_parameter_assignment                               { f ("named_parameter_assignments", $_[1]) }
-                             | named_parameter_assignments named_parameter_assignment   { $_[1]->append_children ($_[2]) }
+named_parameter_assignments:   named_parameter_assignment                                   { f ("named_parameter_assignments", $_[1]) }
+                             | named_parameter_assignments ',' named_parameter_assignment   { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
                              ;
 
 named_parameter_assignment:   '.' parameter_identifier '(' opt_mintypmax_expression ')' {d(@_)}

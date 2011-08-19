@@ -1801,9 +1801,10 @@ sub VP3::Preprocessor::standard::_eval
     use constant {
         MODULE_KEYWORD      => 0,
         MODULE_IDENTIFIER   => 1,
-        PORT_LIST           => 2,
-        MODULE_ITEMS        => 3,
-        ENDMODULE_KEYWORD   => 4,
+        PARAMETER_PORT_LIST => 2,
+        PORT_LIST           => 3,
+        MODULE_ITEMS        => 4,
+        ENDMODULE_KEYWORD   => 5,
     };
 
     sub new
