@@ -21,7 +21,7 @@ diff_%.v: %.v
 	@if [ -f gold/$*.err ]; then echo diff gold/$*.err $*.err; diff gold/$*.err $*.err; else echo "gold/$*.err not found"; false; fi
 
 build_%.v: %.v
-	iverilog -o /dev/null -y . $<
+	iverilog -o /dev/null -y . $< 2>/dev/null
 
 all: $(foreach top, $(TOP), build_$(top)) $(foreach file, $(FILES), diff_$(file))
 	@echo All passed

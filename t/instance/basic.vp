@@ -1,0 +1,13 @@
+module basic ();
+
+@Wires;
+
+@Instance submod s;
+
+@Waive no_source vector_i;
+@Waive no_source scalar_i;
+
+@Waive no_sink vector_o;
+@Waive no_sink scalar_o;
+
+endmodule

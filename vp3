@@ -334,6 +334,9 @@ applied only to the matching part.
 
 =head1 BUGS
 
+This is alpha-quality software and bugs are to be expected. Please report bugs
+in the issue tracker on github.
+
 Many Verilog language constructs are not yet supported, including:
 
 =over 4
@@ -352,7 +355,7 @@ ports connected by order
 
 =item *
 
-generate blocks are only partially supported
+generate blocks (accepted by the parser but not otherwise handled)
 
 =item *
 
@@ -879,7 +882,7 @@ sub VP3::Preprocessor::standard::_eval
                 $bit =~ /^\d+$/ or die "Unsupported complex expression in range: $bit"; # !!!
                 if (!defined ($loconn_msb)) {
                     # single-bit vector connected to scalar, this is ok
-                } elsif ($bit != $loconn_msb || $bit != $loconn_lsb) {
+                } elsif ($loconn_msb != $loconn_lsb) {
                     VP3::warning ($target->location . ": range mismatch in connection for port `$ident'",
                                   "range in $self->{inst_module} is [$loconn_msb:$loconn_lsb]",
                                   "connected to $identifier_subscripts->identifier with range [$bit]");
@@ -896,7 +899,10 @@ sub VP3::Preprocessor::standard::_eval
                 defined ($hiconn_msb) && defined ($loconn_msb) && defined ($hiconn_lsb) && defined ($loconn_lsb)
                     or do { no warnings 'uninitialized'; die "Undefined range value in connection of $ident, hiconn $hiconn_msb:$hiconn_lsb, loconn $loconn_msb:$loconn_lsb"; }; # !!!
 
-                if ($hiconn_msb != $loconn_msb || $hiconn_lsb != $loconn_lsb) {
+                my $hiconn_width = $hiconn_msb >= $hiconn_lsb ? $hiconn_msb - $hiconn_lsb + 1 : $hiconn_lsb - $hiconn_msb + 1;
+                my $loconn_width = $loconn_msb >= $loconn_lsb ? $loconn_msb - $loconn_lsb + 1 : $loconn_lsb - $loconn_msb + 1;
+
+                if ($hiconn_width != $loconn_width) {
                     VP3::warning ($target->location . ": range mismatch in connection for port `$ident'",
                                   "range in $self->{inst_module} is [$loconn_msb:$loconn_lsb]",
                                   "connected to " . $identifier_subscripts->identifier->emit_self . " with range [$hiconn_msb:$hiconn_lsb]");
@@ -2536,6 +2542,23 @@ sub VP3::Preprocessor::standard::_eval
 
 } # package VP3::ParseTree::vp3_module_directive
 
+# FIXME: inheriting from vp3_directive because it's easy. but `directive_text'
+# method won't work right for these
+{
+    package VP3::ParseTree::vp3_ports_directive;
+    use base 'VP3::ParseTree::vp3_directive';
+}
+
+{
+    package VP3::ParseTree::vp3_regs_directive;
+    use base 'VP3::ParseTree::vp3_directive';
+}
+
+{
+    package VP3::ParseTree::vp3_wires_directive;
+    use base 'VP3::ParseTree::vp3_directive';
+}
+
 {
     package VP3::ParseTree::vp3_vector_directive;
     use base 'VP3::ParseTree';
@@ -2679,6 +2702,9 @@ sub VP3::Preprocessor::standard::_eval
         $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $rtn, \$error)
             or die "While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn";
 
+        $tree->location_set_recursive ($target->directive_keyword->source_file,
+                                       $target->directive_keyword->source_line);
+
         # Return the new tree; will replace the vp3_instance_directive node
         $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $rtn);
 
@@ -2789,6 +2815,9 @@ sub VP3::Preprocessor::standard::_eval
         $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $output, \$error)
             or die "While parsing generated port declarations:\n$error\nDeclarations follow:\n$output";
 
+        $tree->location_set_recursive ($target->directive_keyword->source_file,
+                                       $target->directive_keyword->source_line);
+
         $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
     }
 
@@ -2815,6 +2844,9 @@ sub VP3::Preprocessor::standard::_eval
         my ($tree, $error);
         $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $output, \$error)
             or die "While parsing generated reg declarations:\n$error\nDeclarations follow:\n$output";
+
+        $tree->location_set_recursive ($target->directive_keyword->source_file,
+                                       $target->directive_keyword->source_line);
 
         $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
     }
@@ -2845,6 +2877,9 @@ sub VP3::Preprocessor::standard::_eval
         my ($tree, $error);
         $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $output, \$error)
             or die "While parsing generated wire declarations:\n$error\nDeclarations follow:\n$output";
+
+        $tree->location_set_recursive ($target->directive_keyword->source_file,
+                                       $target->directive_keyword->source_line);
 
         $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
     }
