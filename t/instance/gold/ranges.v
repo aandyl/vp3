@@ -8,6 +8,8 @@ module ranges (
     , input wire [15:0] s2_hiconn_toosmall_implicit
     , input wire [31:0] s3_vector_i
     , output wire [15:0] s3_vector_o
+    , input wire [31:0] s4_vector_i
+    , output wire [31:0] s4_vector_o
 );
 
 //|@Wires;
@@ -63,6 +65,16 @@ subB s3 (
 ,.vector_o(s3_vector_o[15:0])
 );
 
+//
+
+//|@Instance subC s4
+//|    -connect /^/ s4_
+//|;
+subC s4 (
+ .vector_i(s4_vector_i[31:0])
+,.vector_o(s4_vector_o[31:0])
+);
+
 endmodule
 
 //|@Module -v2k subA;
@@ -84,5 +96,14 @@ module subB (
 );
     
 assign vector_o = vector_i[0+:16] ^ vector_i[16+:16];
+
+endmodule
+
+module subC (
+    input [2*(12+4)-1:0] vector_i,
+    output [31:0] vector_o
+);
+
+assign vector_o = vector_i;
 
 endmodule

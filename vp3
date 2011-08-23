@@ -14,7 +14,7 @@ VP3 - Verilog preprocessor and generator
 =head1 DESCRIPTION
 
 VP3 is a tool to assist in the description of a hardware design in Verilog. VP3
-can generate module instantations and signal declarations for you. It provides
+can generate module instantiations and signal declarations for you. It provides
 a preprocessor function comparable to the C preprocessor, and allows you to
 generate portions of your Verilog with embedded perl code.
 
@@ -380,7 +380,7 @@ use warnings FATAL => qw(all);
 
 # Note that a version with one dot ("0.x") is treated as 0.x00 whereas a
 # version with two dots ("0.x.y") is treated as 0.00x00y
-our ($VERSION) = "0.1.52";
+our ($VERSION) = "0.1.53";
 
 ######################################################################
 
@@ -2704,8 +2704,12 @@ sub VP3::Preprocessor::standard::_eval
         # Make regexes for rename rules
         for (@{$target->renames}) {
             if ($_->[0] !~ m{^/(.*)/$}) {
+                # Replacements without slashes must match the whole string, add ^ and $ anchors
                 $_->[0] = qr/^$_->[0]$/;
             } else {
+                # Replacements with slashes can be any regular expression; need
+                # to remove the slashes before using it in perl.
+                $_->[0] =~ s{(^/)|(/$)}{}g;
                 $_->[0] = qr/$_->[0]/;
             }
         }
@@ -2737,7 +2741,8 @@ sub VP3::Preprocessor::standard::_eval
                 and confess "Internal error, half-valid range";
 
             for (@{$target->renames}) {
-                $cxn =~ s/$_->[0]/$_->[1]/;
+                # Should put more thought into how exactly to do this
+                $cxn =~ s/$_->[0]/"\"$_->[1]\""/ee;
                     #and print STDERR "-connect: $name ( $cxn )\n";
             }
 
@@ -2755,7 +2760,7 @@ sub VP3::Preprocessor::standard::_eval
 
         my ($tree, $error);
         $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $rtn, \$error)
-            or die "While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn";
+            or VP3::fatal ("While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn");
 
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);

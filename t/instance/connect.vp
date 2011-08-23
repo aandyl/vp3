@@ -1,0 +1,15 @@
+@Module -v2k;
+
+@Wires;
+
+@Instance submod s0
+    -connect /^vector_/ vec_s0_
+;
+
+//
+
+@Instance submod s1
+    -connect (.*)_o s1_${1}
+;
+
+endmodule

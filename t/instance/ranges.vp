@@ -36,6 +36,12 @@
     -connect vector_o s3_vector_o
 ;
 
+//
+
+@Instance subC s4
+    -connect /^/ s4_
+;
+
 endmodule
 
 @Module -v2k subA;
@@ -53,5 +59,14 @@ module subB (
 );
     
 assign vector_o = vector_i[0+:16] ^ vector_i[16+:16];
+
+endmodule
+
+module subC (
+    input [2*(12+4)-1:0] vector_i,
+    output [31:0] vector_o
+);
+
+assign vector_o = vector_i;
 
 endmodule

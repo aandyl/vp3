@@ -1,9 +1,9 @@
 .PRECIOUS: %.v
 
 VP3 := ../../blib/script/vp3
-VP3_DEPS := ../../pm_to_blib
+VP3_DEPS := module_build
 
-%.v: %.vp $(VP3) $(VP3_DEPS)
+%.v: %.vp $(VP3_DEPS)
 	$(if $(VP3_SHOULD_FAIL),! ,)perl -Mblib $(VP3) $(VP3_OPTS) $(VP3_OPTS.$*) -o $@ $< >$*.out 2>$*.err
 	@cat $*.err
 
@@ -30,11 +30,11 @@ all: $(foreach top, $(TOP), build_$(top)) $(foreach file, $(FILES), diff_$(file)
 # test infrastructure, to avoid weirdness
 ifeq ($(HARNESS_ACTIVE),)
 $(VP3): module_build
-../../pm_to_blib: module_build
 .PHONY: module_build
 module_build:
 	$(MAKE) -C ../..
 else
-../../pm_to_blib:
+.PHONY: module_build
+module_build:
 	@true
 endif

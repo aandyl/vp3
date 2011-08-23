@@ -13,6 +13,7 @@ unparsed.v \
 multimod.v \
 noports.v \
 strengths.v \
+v2k_params.v \
 
 # Build options
 
@@ -27,6 +28,7 @@ unparsed.v \
 multimod.v \
 noports.v \
 strengths.v \
+v2k_params.v \
 
 # Build exceptions
 

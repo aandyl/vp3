@@ -6,6 +6,7 @@ FILES := \
 basic.v \
 submod.v \
 ranges.v \
+connect.v \
 
 # Build options
 
@@ -14,6 +15,7 @@ VP3_OPTS := -y .
 TOP := \
 basic.v \
 ranges.v \
+connect.v \
 
 # Build exceptions
 
@@ -21,7 +23,7 @@ ranges.v \
 
 basic.v : submod.v
 
-ranges.v : submod.v
+connect.v : submod.v
 
 # Rules
 

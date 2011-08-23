@@ -1,5 +1,5 @@
 VP3 is a tool to assist in the description of a hardware design in Verilog. VP3
-can generate module instantations and signal declarations for you. It provides
+can generate module instantiations and signal declarations for you. It provides
 a preprocessor function comparable to the C preprocessor, and allows you to
 generate portions of your Verilog with embedded perl code.
 
