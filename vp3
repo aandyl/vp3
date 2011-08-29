@@ -2240,6 +2240,30 @@ sub VP3::Preprocessor::standard::_eval
 } # package VP3::ParseTree::integer_declaration
 
 {
+    package VP3::ParseTree::genvar_declaration;
+    use base 'VP3::ParseTree';
+
+    use constant {
+        LIST_OF_GENVAR_IDENTIFIERS => 0,
+    };
+
+    sub decls
+    {
+        my $self = shift;
+        my %decls;
+
+        for (@{$self->children->[LIST_OF_GENVAR_IDENTIFIERS]->children}) {
+            # !!! should be a method for this
+            my $ident = $_->emit_self;
+            $decls{$ident} = "genvar";
+        }
+
+        %decls;
+    }
+
+} # package VP3::ParseTree::genvar_declaration
+
+{
     package VP3::ParseTree::net_declaration;
     use base 'VP3::ParseTree';
 
@@ -2294,6 +2318,65 @@ sub VP3::Preprocessor::standard::_eval
     }
 
 } # package VP3::ParseTree::net_declaration
+
+{
+    package VP3::ParseTree::trireg_declaration;
+    use base 'VP3::ParseTree';
+
+    use constant {
+        OPT_DRIVE_STRENGTH          => 0,
+        OPT_CHARGE_STRENGTH         => 1,
+        OPT_VECTORED_OR_SCALARED    => 2,
+        OPT_SIGNED                  => 3,
+        OPT_RANGE                   => 4,
+        OPT_DELAY3                  => 5,
+        LIST                        => 6,
+    };
+
+    sub new
+    {
+        my $class = shift;
+        my $self = $class->SUPER::new (@_);
+
+        if ($self->children->[OPT_DRIVE_STRENGTH]->type ne "null" &&
+            $self->children->[LIST]->type ne "list_of_net_decl_assignments") {
+            # !!! Sanity check this error case on other tools
+            VP3::error ("Drive strength illegal in trireg declaration without assignments");
+        }
+
+        if ($self->children->[OPT_CHARGE_STRENGTH]->type ne "null" &&
+            $self->children->[LIST]->type ne "list_of_net_identifiers") {
+            VP3::error ("Charge strength illegal in trireg declaration with assignments");
+        }
+
+        $self;
+    }
+
+    sub decls
+    {
+        my $self = shift;
+        my %decls;
+
+        if ($self->children->[LIST]->type eq "list_of_net_decl_assignments") {
+            for (@{$self->children->[LIST]->children}) {
+                # !!! should be a method for this
+                my $ident = $_->children->[0]->emit_self;
+                $decls{$ident} = "trireg";
+            }
+        } elsif ($self->children->[LIST]->type eq "list_of_net_identifiers") {
+            for (@{$self->children->[LIST]->children}) {
+                # !!! should be a method for this
+                my $ident = $_->children->[0]->emit_self;
+                $decls{$ident} = "trireg";
+            }
+        } else {
+            VP3::fatal ("Illegal declaration list type in trireg_declaration");
+        }
+
+        %decls;
+    }
+
+}
 
 {
     package VP3::ParseTree::range;

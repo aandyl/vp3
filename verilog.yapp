@@ -1,15 +1,9 @@
 %{
 
     # Shortcut to VP3::ParseTree::factory for use in semantic actions
-    #use vars '*f';
     *f = \&VP3::ParseTree::factory;
 
     sub null { f ("null"); }
-
-    sub d
-    {
-        f ("generic", @_[1..$#_]);
-    }
 
     sub list
     {
@@ -36,6 +30,7 @@
     sub decl
     {
         my ($self, $obj) = @_;
+        $obj->can ("decls") or VP3::fatal ("Don't know how to add object of type " . $obj->type . " to symbol table");
         my %decls = $obj->decls;
         while (my ($k, $v) = each %decls) {
             $self->scope->symtab->insert ($k => $v);
@@ -47,6 +42,21 @@
     {
         $_[4]->prepend_text ($_[3]);
         f ("binary_operator_expression", @_[1,2,4]);
+    }
+
+    sub drive_strength
+    {
+        $_[2]->prepend_text ($_[1]);
+        $_[2]->append_text ($_[3]);
+        $_[4]->append_text ($_[5]);
+        f ("drive_strength", @_[2,4]);
+    }
+
+    sub charge_strength
+    {
+        $_[2]->prepend_text ($_[1]);
+        $_[2]->append_text ($_[3]);
+        f ("charge_strength", $_[2]);
     }
 
     sub default_yyerror
@@ -79,7 +89,8 @@
 
 # Shift/reduce conflict in rule "conditional_statement"
 # Shift/reduce conflict in rule "number"
-%expect 2
+# Shift/reduce conflict in rule "generate_conditional_statement"
+%expect 3
 
 %start vp3_parse_start
 
@@ -88,7 +99,7 @@
 # General-use grammar items not part of spec
 
 opt_arguments:   { null }
-               | '(' expressions ')' {d(@_)}
+               | '(' expressions ')' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
                ;
 
 opt_reg:   { null }
@@ -176,7 +187,6 @@ v2k_module_header:   module_preamble                       # 1
                      }
                    ;
 
-# TODO module_parameter_port_list
 module_declaration:   traditional_module_header             # 1
                       opt_module_items                      # 2
                       'endmodule'                           # 3
@@ -382,8 +392,10 @@ pds_parameter_declaration:   'parameter'                  # 1
                              }
                            ;
 
-specparam_declaration: 'specparam' opt_range list_of_specparam_assignments ';' {d(@_)}
-                     ;
+specparam_declaration: 'specparam' opt_range list_of_specparam_assignments ';' { $_[2]->prepend_text ($_[1]);
+                                                                                 $_[3]->append_text ($_[4]);
+                                                                                 f ("specparam_declaration", @_[2,3]) }
+                       ;
 
 parameter_type: 'integer' | 'real' | 'realtime' | 'time';
 
@@ -445,11 +457,15 @@ output_declaration:   'output' output_type list_of_port_identifiers { $_[0]->dec
 
 # 2.1.3 Type declarations
 
-event_declaration: 'event' list_of_event_identifiers ';' {d(@_)}
+event_declaration: 'event' list_of_event_identifiers ';' { $_[0]->decl (f ("event_declaration", @_[1..$#_])) }
                  ;
 
-genvar_declaration: 'genvar' list_of_genvar_identifiers ';' {d(@_)}
-                  ;
+genvar_declaration: 'genvar' list_of_genvar_identifiers ';'
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[2]->append_text ($_[3]);
+                        $_[0]->decl (f ("genvar_declaration", $_[2])) }
+                    ;
 
 integer_declaration: 'integer' list_of_variable_identifiers ';' { $_[0]->decl (f ("integer_declaration", @_[1..$#_])) }
                    ;
@@ -457,8 +473,6 @@ integer_declaration: 'integer' list_of_variable_identifiers ';' { $_[0]->decl (f
 vectored_or_scalared:   'vectored'
                       | 'scalared'
                       ;
-
-# FIXME changes to resolve reduce/reduce conflicts, needs more work
 
 net_declaration: net_type                                     opt_signed       opt_delay3 list_of_net_identifiers      ';' { $_[4]->append_text ($_[5]); $_[0]->decl (f ("net_declaration", $_[1],  null,  null, $_[2],  null, $_[3], $_[4])); }
                | net_type                                     opt_signed       opt_delay3 list_of_net_decl_assignments ';' { $_[4]->append_text ($_[5]); $_[0]->decl (f ("net_declaration", $_[1],  null,  null, $_[2],  null, $_[3], $_[4])); }
@@ -470,26 +484,26 @@ net_declaration: net_type                                     opt_signed       o
                | net_type                vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[6]->append_text ($_[7]); $_[0]->decl (f ("net_declaration", $_[1],  null, $_[2], $_[3], $_[4], $_[5], $_[6])); }
                | net_type drive_strength vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[7]->append_text ($_[8]); $_[0]->decl (f ("net_declaration", $_[1], $_[2], $_[3], $_[4], $_[5], $_[6], $_[7])); }
 
-               | 'trireg'                                                     opt_signed       opt_delay3 list_of_net_identifiers ';' {d(@_)}
-               | 'trireg'                charge_strength                      opt_signed       opt_delay3 list_of_net_identifiers ';' {d(@_)}
-               | 'trireg'                                                     opt_signed       opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
-               | 'trireg' drive_strength                                      opt_signed       opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
+               | 'trireg'                                                     opt_signed       opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[4]->append_text ($_[5]); $_[0]->decl (f ("trireg_declaration",  null,  null,  null, $_[2],  null, $_[3], $_[4])) }
+               | 'trireg'                charge_strength                      opt_signed       opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[5]->append_text ($_[6]); $_[0]->decl (f ("trireg_declaration",  null, $_[2],  null, $_[3],  null, $_[4], $_[5])) }
+               | 'trireg'                                                     opt_signed       opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[4]->append_text ($_[5]); $_[0]->decl (f ("trireg_declaration",  null,  null,  null, $_[2],  null, $_[3], $_[4])) }
+               | 'trireg' drive_strength                                      opt_signed       opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[5]->append_text ($_[6]); $_[0]->decl (f ("trireg_declaration", $_[2],  null,  null, $_[3],  null, $_[4], $_[5])) }
 
-               | 'trireg'                                                     opt_signed range opt_delay3 list_of_net_identifiers ';' {d(@_)}
-               | 'trireg'                charge_strength                      opt_signed range opt_delay3 list_of_net_identifiers ';' {d(@_)}
-               | 'trireg'                                vectored_or_scalared opt_signed range opt_delay3 list_of_net_identifiers ';' {d(@_)}
-               | 'trireg'                charge_strength vectored_or_scalared opt_signed range opt_delay3 list_of_net_identifiers ';' {d(@_)}
+               | 'trireg'                                                     opt_signed range opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[5]->append_text ($_[6]); $_[0]->decl (f ("trireg_declaration",  null,  null,  null, $_[2], $_[3], $_[4], $_[5])) }
+               | 'trireg'                charge_strength                      opt_signed range opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[6]->append_text ($_[7]); $_[0]->decl (f ("trireg_declaration",  null, $_[2],  null, $_[3], $_[4], $_[5], $_[6])) }
+               | 'trireg'                                vectored_or_scalared opt_signed range opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[6]->append_text ($_[7]); $_[0]->decl (f ("trireg_declaration",  null,  null, $_[2], $_[3], $_[4], $_[5], $_[6])) }
+               | 'trireg'                charge_strength vectored_or_scalared opt_signed range opt_delay3 list_of_net_identifiers      ';' { $_[2]->prepend_text ($_[1]); $_[7]->append_text ($_[8]); $_[0]->decl (f ("trireg_declaration",  null, $_[2], $_[3], $_[4], $_[5], $_[6], $_[7])) }
 
-               | 'trireg'                                                     opt_signed range opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
-               | 'trireg' drive_strength                                      opt_signed range opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
-               | 'trireg'                                vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
-               | 'trireg' drive_strength                 vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' {d(@_)}
+               | 'trireg'                                                     opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[5]->append_text ($_[6]); $_[0]->decl (f ("trireg_declaration",  null,  null,  null, $_[2], $_[3], $_[4], $_[5])) }
+               | 'trireg' drive_strength                                      opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[6]->append_text ($_[7]); $_[0]->decl (f ("trireg_declaration", $_[2],  null,  null, $_[3], $_[4], $_[5], $_[6])) }
+               | 'trireg'                                vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[6]->append_text ($_[7]); $_[0]->decl (f ("trireg_declaration",  null,  null, $_[2], $_[3], $_[4], $_[5], $_[6])) }
+               | 'trireg' drive_strength                 vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[7]->append_text ($_[8]); $_[0]->decl (f ("trireg_declaration", $_[2],  null, $_[3], $_[4], $_[5], $_[6], $_[7])) }
                ;
 
-real_declaration: 'real' list_of_real_identifiers ';' {d(@_)}
+real_declaration: 'real' list_of_real_identifiers ';' { $_[0]->decl (f ("real_declaration", @_[1..$#_])) }
                 ;
 
-realtime_declaration: 'realtime' list_of_real_identifiers ';' {d(@_)}
+realtime_declaration: 'realtime' list_of_real_identifiers ';' { $_[0]->decl (f ("realtime_declaration", @_[1..$#_])) }
                     ;
 
 reg_declaration:   'reg' opt_signed opt_range list_of_variable_identifiers ';'
@@ -500,7 +514,7 @@ reg_declaration:   'reg' opt_signed opt_range list_of_variable_identifiers ';'
                    }
                  ;
 
-time_declaration: 'time' list_of_variable_identifiers ';' {d(@_)}
+time_declaration: 'time' list_of_variable_identifiers ';' { $_[0]->decl (f ("time_declaration", @_[1..$#_])) }
                 ;
 
 # 2.2.1 Net and variable types
@@ -528,12 +542,12 @@ opt_drive_strength:   { null }
                     | drive_strength
                     ;
 
-drive_strength:   '(' strength0 ',' strength1 ')' {d(@_)}
-                | '(' strength1 ',' strength0 ')' {d(@_)}
-                | '(' strength0 ',' 'highz1'  ')' {d(@_)}
-                | '(' strength1 ',' 'highz0'  ')' {d(@_)}
-                | '(' 'highz0'  ',' strength1 ')' {d(@_)}
-                | '(' 'highz1'  ',' strength0 ')' {d(@_)}
+drive_strength:   '(' strength0 ',' strength1 ')' { drive_strength (@_) }
+                | '(' strength1 ',' strength0 ')' { drive_strength (@_) }
+                | '(' strength0 ',' 'highz1'  ')' { drive_strength (@_) }
+                | '(' strength1 ',' 'highz0'  ')' { drive_strength (@_) }
+                | '(' 'highz0'  ',' strength1 ')' { drive_strength (@_) }
+                | '(' 'highz1'  ',' strength0 ')' { drive_strength (@_) }
                 ;
 
 strength0: 'supply0' | 'strong0' | 'pull0' | 'weak0'
@@ -546,9 +560,9 @@ strength1: 'supply1' | 'strong1' | 'pull1' | 'weak1'
 #                     | charge_strength
 #                     ;
 
-charge_strength:   '(' 'small'  ')' {d(@_)}
-                 | '(' 'medium' ')' {d(@_)}
-                 | '(' 'large'  ')' {d(@_)}
+charge_strength:   '(' 'small'  ')' { charge_strength (@_) }
+                 | '(' 'medium' ')' { charge_strength (@_) }
+                 | '(' 'large'  ')' { charge_strength (@_) }
                  ;
 
 # 2.2.3 Delays
@@ -557,10 +571,10 @@ opt_delay3:   { null }
             | delay3
             ;
 
-delay3:   '#' delay_value {d(@_)}
-        | '#' '(' mintypmax_expression ')' {d(@_)}
-        | '#' '(' mintypmax_expression ',' mintypmax_expression ')' {d(@_)}
-        | '#' '(' mintypmax_expression ',' mintypmax_expression ',' mintypmax_expression ')' {d(@_)}
+delay3:   '#' delay_value { $_[2]->prepend_text ($_[1]); f ("delay", $_[2]) }
+        | '#' '(' mintypmax_expression                                                   ')' { $_[3]->prepend_text ($_[2])->prepend_text ($_[1]); $_[3]->append_text ($_[4]);                                                         f ("delay", $_[3]    ) }
+        | '#' '(' mintypmax_expression ',' mintypmax_expression                          ')' { $_[3]->prepend_text ($_[2])->prepend_text ($_[1]); $_[3]->append_text ($_[4]); $_[5]->append_text ($_[6]);                             f ("delay", @_[3,5]  ) }
+        | '#' '(' mintypmax_expression ',' mintypmax_expression ',' mintypmax_expression ')' { $_[3]->prepend_text ($_[2])->prepend_text ($_[1]); $_[3]->append_text ($_[4]); $_[5]->append_text ($_[6]); $_[7]->append_text ($_[8]); f ("delay", @_[3,5,7]) }
         ;
 
 #opt_delay2:   { null }
@@ -583,8 +597,12 @@ list_of_defparam_assignments:   defparam_assignment                             
                               | list_of_defparam_assignments ',' defparam_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
                               ;
 
-list_of_event_identifiers: event_identifier opt_dimensions {d(@_)}
-                         ;
+event_identifier_dimensions: event_identifier opt_dimensions { f ("event_identifier_dimensions", @_[1..$#_]) }
+                           ;
+
+list_of_event_identifiers:   event_identifier_dimensions                               { f ("list_of_event_identifiers", $_[1]) }
+                           | list_of_event_identifiers ',' event_identifier_dimensions { list_delim (@_[1..$#_]) }
+                           ;
 
 list_of_genvar_identifiers:   genvar_identifier                                 { f ("list_of_genvar_identifiers", $_[1]) }
                             | list_of_genvar_identifiers ',' genvar_identifier  { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
@@ -630,12 +648,12 @@ pas_param_assignments:   pas_param_assignment                       { f ("list_o
 #                           | list_of_param_assignments ',' param_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
 #                           ;
 
-list_of_real_identifiers: real_type
-                        | list_of_real_identifiers ',' real_type {d(@_)}
-                        ;
+list_of_real_identifiers:   real_type                              { f ("list_of_real_identifiers", $_[1]) }
+                          | list_of_real_identifiers ',' real_type { list_delim (@_[1..$#_]) }
+                          ;
 
-list_of_specparam_assignments:   specparam_assignment
-                               | list_of_specparam_assignments ',' specparam_assignment { d(@_)}
+list_of_specparam_assignments:   specparam_assignment                                   { f ("list_of_specparam_assignments", $_[1]) }
+                               | list_of_specparam_assignments ',' specparam_assignment { list_delim (@_[1..$#_]) }
                                ;
 
 list_of_variable_identifiers: variable_type                                  { f ("list_of_variable_identifiers", $_[1]) }
@@ -647,18 +665,18 @@ list_of_variable_identifiers: variable_type                                  { f
 # 2.4 Declaration assignments
 
 # !!! should be constant_mintypmax_expression
-defparam_assignment: hierarchical_parameter_identifier '=' constant_expression {d(@_)}
-                   ;
+defparam_assignment: hierarchical_parameter_identifier '=' constant_expression { $_[1]->append_text ($_[2]); f ("defparam_assignment", @_[1,3]) }
+                     ;
 
 net_decl_assignment: net_identifier '=' expression { $_[1]->append_text ($_[2]); f ("assignment", "continuous", $_[1], null, $_[3]) }
-                   ;
+                     ;
 
 param_assignment: parameter_identifier '=' constant_expression { $_[1]->append_text ($_[2]); f ("param_assignment", $_[1], $_[3]); }
                 ;
 
 # !!! should be constant_mintypmax_expression
 # TODO pulse_control_specparam
-specparam_assignment:   specparam_identifier '=' constant_expression {d(@_)}
+specparam_assignment:   specparam_identifier '=' constant_expression { $_[1]->append_text ($_[2]); f ("specparam_assignment", @_[1,3]) }
                       ;
 
 # pulse_control_specparam
@@ -673,10 +691,11 @@ dimensions: dimension            { f ("dimensions", $_[1]) }
           | dimensions dimension { $_[1]->append_children ($_[2]) }
           ;
 
-# spec uses "dimension_constant_expression", which is defined as constant_expression
-# !!! check this?
-dimension: '[' expression ':' expression ']' {d(@_)}
-         ;
+dimension: '[' dimension_constant_expression ':' dimension_constant_expression ']' { $_[2]->prepend_text ($_[1]);
+                                                                                     $_[4]->prepend_text ($_[3]);
+                                                                                     $_[4]->append_text ($_[5]);
+                                                                                     f ("dimension", @_[2,4]) }
+           ;
 
 opt_range:   { null }
            | range
@@ -708,7 +727,7 @@ function_item_declarations:   function_item_declaration                         
                             ;
 
 function_item_declaration:   block_item_declaration
-                           | attr tf_input_declaration ';' {d(@_)}
+                           | attr tf_input_declaration ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
                            ;
 
 # function_port_list may not be empty
@@ -716,17 +735,17 @@ function_port_list:   pip_function_port                     { f ("function_port_
                     | pic_function_ports pip_function_port  { list (@_[1,2]) }
                     ;
 
-#function_port: attr tf_input_declaration {d(@_)}
+#function_port: attr tf_input_declaration { $_[2]->prepend_text ($_[1]) }
 #               ;
 
-pip_function_port: attr pip_tf_input_declaration {d(@_)}
+pip_function_port: attr pip_tf_input_declaration { $_[2]->prepend_text ($_[1]) }
                    ;
 
 pic_function_ports:   pic_function_port                    { f ("function_port_list", $_[1]) }
                     | pic_function_ports pic_function_port { list (@_[1,2]) }
                     ;
 
-pic_function_port:   attr pic_tf_input_declaration {d(@_)}
+pic_function_port:   attr pic_tf_input_declaration { $_[2]->prepend_text ($_[1]) }
                    ;
 
 opt_range_or_type:   { null }
@@ -759,9 +778,9 @@ task_item_declarations:   task_item_declaration                        { f ("tas
                         ;
 
 task_item_declaration:   block_item_declaration
-                       | attr tf_input_declaration  ';' {d(@_)}
-                       | attr tf_output_declaration ';' {d(@_)}
-                       | attr tf_inout_declaration  ';' {d(@_)}
+                       | attr tf_input_declaration  ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
+                       | attr tf_output_declaration ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
+                       | attr tf_inout_declaration  ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
                        ;
 
 # task_port_list may be empty
@@ -770,58 +789,58 @@ task_port_list:   ')'                                    { f ("task_port_list", 
                 | pic_task_port_items pip_task_port_item { list (@_[1..2]) }
                 ;
 
-#task_port_item:   attr tf_input_declaration  {d(@_)}
-#                | attr tf_output_declaration {d(@_)}
-#                | attr tf_inout_declaration  {d(@_)}
+#task_port_item:   attr tf_input_declaration  { $_[2]->prepend_text ($_[1]) }
+#                | attr tf_output_declaration { $_[2]->prepend_text ($_[1]) }
+#                | attr tf_inout_declaration  { $_[2]->prepend_text ($_[1]) }
 #                ;
 
-pip_task_port_item:   attr pip_tf_input_declaration  {d(@_)}
-                    | attr pip_tf_output_declaration {d(@_)}
-                    | attr pip_tf_inout_declaration  {d(@_)}
+pip_task_port_item:   attr pip_tf_input_declaration  { $_[2]->prepend_text ($_[1]) }
+                    | attr pip_tf_output_declaration { $_[2]->prepend_text ($_[1]) }
+                    | attr pip_tf_inout_declaration  { $_[2]->prepend_text ($_[1]) }
                     ;
 
 pic_task_port_items:   pic_task_port_item                     { f ("task_port_list", $_[1]) }
                      | pic_task_port_items pic_task_port_item { list (@_[1,2]) }
                      ;
 
-pic_task_port_item:   attr pic_tf_input_declaration  {d(@_)}
-                    | attr pic_tf_output_declaration {d(@_)}
-                    | attr pic_tf_inout_declaration  {d(@_)}
+pic_task_port_item:   attr pic_tf_input_declaration  { $_[2]->prepend_text ($_[1]) }
+                    | attr pic_tf_output_declaration { $_[2]->prepend_text ($_[1]) }
+                    | attr pic_tf_inout_declaration  { $_[2]->prepend_text ($_[1]) }
                     ;
 
-pip_tf_input_declaration:   'input' task_port_type pip      {d(@_)}
-                          | 'input' task_port_type pics pip {d(@_)}
+pip_tf_input_declaration:   'input' task_port_type pip      { f ("tf_input_declaration", @_[1..$#_]) }
+                          | 'input' task_port_type pics pip { f ("tf_input_declaration", @_[1..$#_]) }
                           ;
 
-pic_tf_input_declaration: 'input' task_port_type pics {d(@_)}
+pic_tf_input_declaration: 'input' task_port_type pics { f ("tf_input_declaration", @_[1..$#_]) }
                           ;
 
-tf_input_declaration: 'input' task_port_type list_of_port_identifiers {d(@_)}
+tf_input_declaration: 'input' task_port_type list_of_port_identifiers { f ("tf_input_declaration", @_[1..$#_]) }
                       ;
 
-pip_tf_output_declaration:   'output' task_port_type pip      {d(@_)}
-                           | 'output' task_port_type pics pip {d(@_)}
+pip_tf_output_declaration:   'output' task_port_type pip      { f ("tf_output_declaration", @_[1..$#_]) }
+                           | 'output' task_port_type pics pip { f ("tf_output_declaration", @_[1..$#_]) }
                            ;
 
-pic_tf_output_declaration: 'output' task_port_type pics {d(@_)}
+pic_tf_output_declaration: 'output' task_port_type pics { f ("tf_output_declaration", @_[1..$#_]) }
                            ;
 
-tf_output_declaration: 'output' task_port_type list_of_port_identifiers {d(@_)}
+tf_output_declaration: 'output' task_port_type list_of_port_identifiers { f ("tf_output_declaration", @_[1..$#_]) }
                        ;
 
-pip_tf_inout_declaration:   'inout' task_port_type pip      {d(@_)}
-                          | 'inout' task_port_type pics pip {d(@_)}
+pip_tf_inout_declaration:   'inout' task_port_type pip      { f ("tf_inout_declaration", @_[1..$#_]) }
+                          | 'inout' task_port_type pics pip { f ("tf_inout_declaration", @_[1..$#_]) }
                           ;
 
-pic_tf_inout_declaration: 'inout' task_port_type pics {d(@_)}
+pic_tf_inout_declaration: 'inout' task_port_type pics { f ("tf_inout_declaration", @_[1..$#_]) }
                           ;
 
-tf_inout_declaration: 'inout' task_port_type list_of_port_identifiers {d(@_)}
+tf_inout_declaration: 'inout' task_port_type list_of_port_identifiers { f ("tf_inout_declaration", @_[1..$#_]) }
                       ;
 
 # This does not match the spec exactly. Spec defines syntax for net or reg
 # ports independently of task_port_type grammar item
-task_port_type:   opt_reg opt_signed opt_range {d(@_)}
+task_port_type:   opt_reg opt_signed opt_range { f ("task_port_type", @_[1..$#_]) }
                 | 'integer'
                 | 'real'
                 | 'realtime'
@@ -841,14 +860,39 @@ block_item_declarations:   block_item_declaration                           { f 
 # The spec has a semicolon after parameter_declaration and
 # local_parameter_declaration here. We consume the semicolon within the rules
 # for shift/reduce conflict avoidance.
-block_item_declaration:   attr 'reg' opt_signed opt_range list_of_block_variable_identifiers ';' {d(@_)}
-                        | attr 'integer' list_of_block_variable_identifiers ';' {d(@_)}
-                        | attr 'time' list_of_block_variable_identifiers ';' {d(@_)}
-                        | attr 'real' list_of_block_real_identifiers ';' {d(@_)}
-                        | attr 'realtime' list_of_block_real_identifiers ';' {d(@_)}
-                        | attr event_declaration {d(@_)}
-                        | attr local_parameter_declaration {d(@_)}
-                        | attr pds_parameter_declaration {d(@_)}
+block_item_declaration:   attr 'reg' opt_signed opt_range list_of_block_variable_identifiers ';'
+                          {
+                              $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                              $_[5]->append_text ($_[6]);
+                              f ("block_reg_declaration", @_[3,4,5]);
+                          }
+                        | attr 'integer' list_of_block_variable_identifiers ';'
+                          {
+                              $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                              $_[3]->append_text ($_[4]);
+                              f ("block_integer_declaration", $_[3]);
+                          }
+                        | attr 'time' list_of_block_variable_identifiers ';'
+                          {
+                              $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                              $_[3]->append_text ($_[4]);
+                              f ("block_time_declaration", $_[3]);
+                          }
+                        | attr 'real' list_of_block_real_identifiers ';'
+                          {
+                              $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                              $_[3]->append_text ($_[4]);
+                              f ("block_real_declaration", $_[3]);
+                          }
+                        | attr 'realtime' list_of_block_real_identifiers ';'
+                          {
+                              $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                              $_[3]->append_text ($_[4]);
+                              f ("block_realtime_declaration", $_[3]);
+                          }
+                        | attr event_declaration { $_[2]->prepend_text ($_[1]); }
+                        | attr local_parameter_declaration { $_[2]->prepend_text ($_[1]) }
+                        | attr pds_parameter_declaration { $_[2]->prepend_text ($_[1]) }
                         ;
 
 list_of_block_variable_identifiers:   block_variable_type                                        { f ("list_of_block_variable_identifiers", $_[1]); }
@@ -859,10 +903,10 @@ list_of_block_real_identifiers:   block_real_type                               
                                 | list_of_block_real_identifiers ',' block_real_type { list_delim (@_[1..$#_]); }
                                 ;
 
-block_variable_type: variable_identifier opt_dimensions {d(@_)}
+block_variable_type: variable_identifier opt_dimensions { f ("block_variable_type", @_[1,2]) }
                      ;
 
-block_real_type: real_identifier opt_dimensions {d(@_)}
+block_real_type: real_identifier opt_dimensions { f ("block_real_type", @_[1,2]) }
                  ;
 
 # 3 Primitive instances
@@ -891,7 +935,9 @@ named_parameter_assignments:   named_parameter_assignment                       
                              | named_parameter_assignments ',' named_parameter_assignment   { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
                              ;
 
-named_parameter_assignment:   '.' parameter_identifier '(' opt_mintypmax_expression ')' {d(@_)}
+named_parameter_assignment:   '.' parameter_identifier '(' opt_mintypmax_expression ')' { $_[2]->prepend_text ($_[1]);
+                                                                                          $_[4]->prepend_text ($_[3])->append_text ($_[5]);
+                                                                                          f ("named_parameter_assignment", @_[2,4]) }
                             ;
 
 module_instantiation:   module_identifier
@@ -933,9 +979,9 @@ generated_instantiation:   'generate' opt_generate_items 'endgenerate' { $_[2]->
                                                                          f ("generated_instantiation", $_[2]) }
                          ;
 
-#generate_item_or_null:   generate_item
-#                       | ';'            { null->prepend_text ($_[1]) }
-#                       ;
+generate_item_or_null:   generate_item
+                       | ';'            { null->append_text ($_[1]) }
+                       ;
 
 opt_generate_items:   { null }
                     | generate_items
@@ -945,7 +991,6 @@ generate_items:   generate_item                 { f ("generate_items", $_[1]) }
                 | generate_items generate_item  { $_[1]->append_children ($_[2]) }
                 ;
 
-# generate_conditional_statement, generate_case_statement
 generate_item:   generate_conditional_statement
                | generate_case_statement
                | generate_loop_statement
@@ -953,19 +998,84 @@ generate_item:   generate_conditional_statement
                | module_or_generate_item
                ;
 
-#generate_conditional_statement: 'if' '(' constant_expression ')' generate_item_or_null opt_generate_conditional_statement_else {d(@_)} ;
+generate_conditional_statement: 'if'
+                                '('
+                                constant_expression
+                                ')'
+                                generate_item_or_null
+                                opt_generate_conditional_statement_else
+                                {
+                                    $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                                    $_[3]->append_text ($_[4]);
+                                    f ("generate_conditional_statement", @_[3,5,6]);
+                                }
+                                ;
 
-#generate_case_statement: 'case' '(' constant_expression ')' genvar_case_items 'endcase' {d(@_)} ;
+opt_generate_conditional_statement_else:   { null }
+                                         | 'else' generate_item_or_null { $_[2]->prepend_text ($_[1]) }
+                                         ;
 
-#genvar_case_item: constant_expressions
-
-generate_loop_statement:   'for' '(' genvar_assignment ';' constant_expression ';' genvar_assignment ')'
-                           'begin' ':' generate_block_identifier opt_generate_items 'end' {d(@_)}
+generate_case_statement: 'case'
+                         '('
+                         constant_expression
+                         ')'
+                         genvar_case_items
+                         'endcase'
+                         {
+                             $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                             $_[3]->append_text ($_[4]);
+                             $_[5]->append_text ($_[6]);
+                             f ("generate_case_statement", @_[3,5]);
+                         }
                          ;
 
-genvar_assignment: genvar_identifier '=' constant_expression {d(@_)} ;
+genvar_case_items:   genvar_case_item                   { f ("genvar_case_items", $_[1]) }
+                   | genvar_case_items genvar_case_item { list (@_[1,2]) }
+                   ;
 
-generate_block: 'begin' opt_generate_block_identifier opt_generate_items 'end' {d(@_)} ;
+constant_expressions:   constant_expression                          { f ("constant_expressions", $_[1]) }
+                      | constant_expressions ',' constant_expression { list (@_[1,2]) }
+                      ;
+
+genvar_case_item:   constant_expressions ':' generate_item_or_null { $_[1]->append_text ($_[2]); f ("genvar_case_item", @_[1,3]); }
+                  | 'default'            ':' generate_item_or_null { $_[1]->append_text ($_[2]); f ("genvar_case_item", @_[1,3]); }
+                  | 'default'                generate_item_or_null {                             f ("genvar_case_item", @_[1,2]); }
+                  ;
+
+generate_loop_statement:   'for'                        # 1
+                           '('                          # 2
+                           genvar_assignment            # 3
+                           ';'                          # 4
+                           constant_expression          # 5
+                           ';'                          # 6
+                           genvar_assignment            # 7
+                           ')'                          # 8
+                           'begin'                      # 9
+                           ':'                          # 10
+                           generate_block_identifier    # 11
+                           opt_generate_items           # 12
+                           'end'                        # 13
+                           {
+                               $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                               $_[3]->append_text ($_[4]);
+                               $_[5]->append_text ($_[6]);
+                               $_[7]->append_text ($_[8]);
+                               $_[7]->append_text ($_[9]);
+                               $_[7]->append_text ($_[10]);
+                               $_[12]->append_text ($_[13]);
+                               f ("generate_loop_statement", @_[3,5,7,11,12]);
+                           }
+                         ;
+
+genvar_assignment: genvar_identifier '=' constant_expression { $_[1]->append_text ($_[2]); f ("genvar_assignment", @_[1,3]) }
+                   ;
+
+generate_block:   'begin' opt_generate_block_identifier opt_generate_items 'end'
+                  {
+                      $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]);
+                      f ("generate_block", @_[2,3]);
+                  }
+                ;
 
 opt_generate_block_identifier:   { null }
                                | ':' generate_block_identifier { $_[2]->prepend_text ($_[1]) }
@@ -990,7 +1100,7 @@ list_of_net_assignments:   net_assignment { VP3::ParseTree->factory ("list_of_ne
                          | list_of_net_assignments ',' net_assignment { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
                          ;
 
-#net_assignment: net_lvalue '=' expression {d(@_)}
+#net_assignment: net_lvalue '=' expression
 #                ;
 
 net_assignment: assignment;
@@ -1015,18 +1125,22 @@ blocking_assignment: lvalue '=' opt_delay_or_event_control expression { $_[1]->a
 nonblocking_assignment: lvalue '<=' opt_delay_or_event_control expression { $_[1]->append_text ($_[2]); f ("assignment", "nonblocking", @_[1,3,4]) }
                       ;
 
-procedural_continuous_assignment: 'assign' variable_assignment  {d(@_)}
-                                | 'deassign' lvalue             {d(@_)} # variable_lvalue
-                                | 'force' assignment            {d(@_)} # variable_assignment or net_assignment
-                                | 'release' lvalue              {d(@_)} # variable_lvalue or net_lvalue
-                                ;
+# spec uses the following more specific constructions:
+# deassign variable_lvalue
+# force variable_assignment or net_assignment
+# release variable_lvalue or net_lvalue
+procedural_continuous_assignment:   'assign'   variable_assignment { f ("procedural_continuous_assignment", @_[2,3]) }
+                                  | 'deassign' lvalue              { f ("procedural_continuous_assignment", @_[2,3]) } 
+                                  | 'force'    assignment          { f ("procedural_continuous_assignment", @_[2,3]) } 
+                                  | 'release'  lvalue              { f ("procedural_continuous_assignment", @_[2,3]) } 
+                                  ;
 
 #function_blocking_assignment:
 #function_statement_or_null:
 
 # 6.3 Parallel and sequential blocks
 
-#variable_assignment: variable_lvalue '=' expression {d(@_)}
+#variable_assignment: variable_lvalue '=' expression
 #                   ;
 
 variable_assignment: assignment;
@@ -1047,16 +1161,16 @@ statements:   statement             { f ("statements", $_[1]) }
 statement:   blocking_assignment ';'               { $_[1]->append_text ($_[2]) } # attr version: { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
            | case_statement                        # attr version: { $_[2]->prepend_text ($_[1]) }
            | conditional_statement                 # attr version: { $_[2]->prepend_text ($_[1]) }
-           | disable_statement                     {d(@_)}
-           | event_trigger                         {d(@_)}
-           | loop_statement                        {d(@_)}
-           | nonblocking_assignment ';'            {d(@_)}
-           | procedural_continuous_assignment ';'  {d(@_)}
-           | procedural_timing_control_statement   {d(@_)}
+           | disable_statement
+           | event_trigger
+           | loop_statement
+           | nonblocking_assignment ';'            { $_[1]->append_text ($_[2]) }
+           | procedural_continuous_assignment ';'  { $_[1]->append_text ($_[2]) }
+           | procedural_timing_control_statement
            | seq_block                             # attr version: { $_[2]->prepend_text ($_[1]) }
-           | system_task_enable                    {d(@_)}
-           | task_enable                           {d(@_)}
-           | wait_statement                        {d(@_)}
+           | system_task_enable
+           | task_enable
+           | wait_statement
            ;
 
 # !!! attr (on null statement)
@@ -1070,8 +1184,12 @@ function_statement: statement
 
 # 6.5 Timing control statements
 
-delay_control:   '#' delay_value {d(@_)}
-               | '#' '(' mintypmax_expression ')' {d(@_)}
+delay_control:   '#' delay_value { $_[2]->prepend_text ($_[1]); f ("delay_control", $_[2]) }
+               | '#' '(' mintypmax_expression ')' {
+                                                      $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                                                      $_[3]->append_text ($_[4]);
+                                                      f("delay_control", $_[3]);
+                                                  }
                ;
 
 opt_delay_or_event_control:   { null }
@@ -1080,40 +1198,60 @@ opt_delay_or_event_control:   { null }
 
 delay_or_event_control:   delay_control
                         | event_control
-                        | repeat '(' expression ')' event_control {d(@_)}
+                        | 'repeat' '(' expression ')' event_control {
+                                                                        $_[3]->prepend_text ($_[2]);
+                                                                        $_[3]->append_text ($_[4]);
+                                                                        f ("repeat_event_control", @_[3,5]);
+                                                                    }
                         ;
 
-disable_statement: 'disable' hierarchical_task_or_block_identifier ';' {d(@_)}
-                 ;
+disable_statement: 'disable' hierarchical_task_or_block_identifier ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]);
+                                                                         f ("disable_statement", $_[2]) }
+                   ;
 
 # !!! Are spaces within (*) legal?
-event_control:   '@' event_identifier           {d(@_)}
-               | '@' '(' event_expressions ')'  {d(@_)}
-               | '@' '*'                        {d(@_)}
-               | '@' '(' '*' ')'                {d(@_)}
-               | '@' '(*' ')'                   {d(@_)}
-               | '@' '(*)'                      {d(@_)}
-               | '@' '(' '*)'                   {d(@_)}
+event_control:   '@' event_identifier           { $_[2]->prepend_text ($_[1]); f ("event_control", $_[2]) }
+               | '@' '(' event_expressions ')'  {
+                                                    $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                                                    $_[3]->append_text ($_[4]);
+                                                    f ("event_control", $_[3]);
+                                                }
+               | '@' '*'                        { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2]) }
+               | '@' '('   '*' ')'              { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2])->append_text ($_[3])->append_text ($_[4]) }
+               | '@' '(*'  ')'                  { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2])->append_text ($_[3]) }
+               | '@' '(*)'                      { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2]) }
+               | '@' '('   '*)'                 { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2])->append_text ($_[3]) }
                ;
 
-event_trigger: '->' hierarchical_event_identifier ';' {d(@_)}
-             ;
+# !!! identifier is allowed to be an array in which case this has subscripts
+event_trigger: '->' hierarchical_event_identifier ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]);
+                                                        f ("event_trigger", $_[2]) }
+               ;
 
-event_expressions: event_expression                         {d(@_)}
-                 | event_expressions 'or' event_expression  {d(@_)}
-                 | event_expressions ','  event_expression  {d(@_)}
-                 ;
+event_expressions:   event_expression                         { f ("event_expressions", $_[1]) }
+                   | event_expressions 'or' event_expression  { list_delim (@_[1..$#_]) }
+                   | event_expressions ','  event_expression  { list_delim (@_[1..$#_]) }
+                   ;
 
-event_expression: expression
-                | 'posedge' expression {d(@_)}
-                | 'negedge' expression {d(@_)}
-                ;
+event_expression:             expression { f ("event_expression",  null, $_[1]) }
+                  | 'posedge' expression { f ("event_expression", $_[1], $_[2]) }
+                  | 'negedge' expression { f ("event_expression", $_[1], $_[2]) }
+                  ;
 
-procedural_timing_control_statement: delay_or_event_control statement_or_null { f ("procedural_timing_control_statement", @_[1..$#_]) }
+procedural_timing_control:   delay_control
+                           | event_control
+                           ;
+
+procedural_timing_control_statement: procedural_timing_control statement_or_null { f ("procedural_timing_control_statement", @_[1..$#_]) }
                                    ;
 
-wait_statement: 'wait' '(' expression ')' statement_or_null {d(@_)}
-              ;
+wait_statement: 'wait' '(' expression ')' statement_or_null
+                {
+                    $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                    $_[3]->append_text ($_[4]);
+                    f ("wait_statement", @_[3,5]);
+                }
+                ;
 
 # 6.6 Conditional statements
 
@@ -1124,7 +1262,7 @@ conditional_statement: 'if' '(' expression ')' statement_or_null opt_else
                      ;
 
 opt_else:                           { null }
-        | 'else' statement_or_null  {d(@_)}
+        | 'else' statement_or_null  { $_[2]->prepend_text ($_[1]) }
         ;
 
 # 6.7 Case statements
@@ -1139,17 +1277,54 @@ case_items:   case_item              { f ("case_items", $_[1]) }
             | case_items case_item   { $_[1]->append_children ($_[2]) }
             ;
 
-case_item:   expressions ':' statement_or_null {d(@_)}
-           | 'default' ':' statement_or_null {d(@_)}
-           | 'default'     statement_or_null {d(@_)}
+case_item:   expressions ':' statement_or_null { $_[1]->append_text ($_[2]); f ("case_item", @_[1,3]) }
+           | 'default'   ':' statement_or_null { $_[1]->append_text ($_[2]); f ("case_item", @_[1,3]) }
+           | 'default'       statement_or_null {                             f ("case_item", @_[1,2]) }
            ;
 
 # 6.8 Looping statements
 
-loop_statement:   'forever' statement {d(@_)}
-                | 'repeat' '(' expression ')' statement {d(@_)}
-                | 'while' '(' expression ')' statement {d(@_)}
-                | 'for' '(' variable_assignment ';' expression ';' variable_assignment ')' statement {d(@_)}
+loop_statement:   'forever' statement
+                  {
+                      $_[2]->prepend_text ($_[1]);
+                      f ("forever_statement", $_[2]);
+                  }
+                | 'repeat'
+                  '('
+                  expression
+                  ')'
+                  statement
+                  {
+                      $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                      $_[3]->append_text ($_[4]);
+                      f ("repeat_statement", @_[3,5]);
+                  }
+                | 'while'
+                  '('
+                  expression
+                  ')'
+                  statement
+                  {
+                      $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                      $_[3]->append_text ($_[4]);
+                      f ("while_statement", @_[3,5]);
+                  }
+                | 'for'
+                  '('
+                  variable_assignment
+                  ';'
+                  expression
+                  ';'
+                  variable_assignment
+                  ')'
+                  statement
+                  {
+                      $_[3]->prepend_text ($_[2])->prepend_text ($_[1]);
+                      $_[3]->append_text ($_[4]);
+                      $_[5]->append_text ($_[6]);
+                      $_[7]->append_text ($_[8]);
+                      f ("for_statement", @_[3,5,7,9]);
+                  }
                 ;
 
 # 6.9 Task enable statements
@@ -1164,7 +1339,13 @@ task_enable: hierarchical_task_identifier opt_arguments ';' { $_[2]->append_text
 
 # 7.1 Specify block declaration
 
-specify_block: 'specify' opt_specify_items 'endspecify' {d(@_)}
+# !!! opt_specify_items
+specify_block: 'specify' opt_specify_items 'endspecify'
+                {
+                    $_[2]->prepend_text ($_[1]);
+                    $_[2]->append_text ($_[3]);
+                    f ("specify_block", $_[2]);
+                }
                ;
 
 # TODO more
@@ -1202,8 +1383,14 @@ system_function_call:   system_function_identifier opt_arguments { f ("function_
 
 base_expression: expression;
 
-conditional_expression: expression '?' attr expression ':' expression {d(@_)}
-                      ;
+conditional_expression: expression '?' attr expression ':' expression
+                        {
+                            $_[1]->append_text ($_[2]);
+                            $_[4]->prepend_text ($_[3]);
+                            $_[4]->append_text ($_[5]);
+                            f ("conditional_expression", @_[1,4,6]);
+                        }
+                        ;
 
 # TODO more
 #constant_expression:   constant_primary
@@ -1212,6 +1399,9 @@ conditional_expression: expression '?' attr expression ':' expression {d(@_)}
 
 # !!! to enforce elsewhere
 constant_expression: expression;
+
+dimension_constant_expression: constant_expression
+                               ;
 
 expressions:   expression                 { f ("expressions", $_[1]) }
              | expressions ',' expression { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
@@ -1297,13 +1487,13 @@ primary:   number
 
 # 8.5 Expression left-side values
 
-lvalues:   lvalue             { f ("lvalues", $_[1]) }
+lvalues:   lvalue             { f ("lvalue_concatenation", $_[1]) }
          | lvalues ',' lvalue { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
          ;
 
 lvalue:   hierarchical_identifier
         | hierarchical_identifier subscripts { f ("identifier_subscripts", @_[1..$#_]) }
-        | '{' lvalues '}' {d(@_)}
+        | '{' lvalues '}' { $_[2]->prepend_text ($_[1])->append_text ($_[3]); }
         ;
 
 # TODO
@@ -1341,13 +1531,20 @@ number:   'SIMPLE_NUMBER'
         | 'SIMPLE_NUMBER' 'BASED_NUMBER'    { $_[2]->prepend_text ($_[1]);
                                               $_[2]->width (VP3::Expression::eval_simple_number (undef, $_[1]));
                                               $_[2] }
-        | 'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER'                           {d(@_)}
-        | 'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER' exp sign 'SIMPLE_NUMBER'  {d(@_)}
+        | real_number
         ;
+
+real_number:   'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER'                               { $_[1]->append_text ($_[2]);                              f ("real_number", $_[1], $_[3],  null,  null) }
+             | 'SIMPLE_NUMBER'                     exp opt_sign 'SIMPLE_NUMBER'  {                             $_[3]->prepend_text ($_[2]); f ("real_number", $_[1],  null, $_[3], $_[4]) }
+             | 'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER' exp opt_sign 'SIMPLE_NUMBER'  { $_[1]->append_text ($_[2]); $_[5]->prepend_text ($_[4]); f ("real_number", $_[1], $_[3], $_[5], $_[6]) }
+             ;
 
 exp: 'e' | 'E' ;
 
-sign: '+' | '-' ;
+opt_sign:       { null }
+          | '+'
+          | '-'
+          ;
 
 # 8.8 Strings
 
@@ -1385,7 +1582,7 @@ hierarchical_event_identifier: hierarchical_identifier;
 hierarchical_function_identifier: hierarchical_identifier;
 
 # TODO Arrayed instances
-hierarchical_identifier_piece:   IDENTIFIER '.' {d(@_)}
+hierarchical_identifier_piece:   IDENTIFIER '.' { $_[1]->append_text ($_[2]) }
                                ;
 
 hierarchical_identifier_pieces:   hierarchical_identifier_piece                                { f ("hierarchical_identifier_pieces", $_[1]) }
