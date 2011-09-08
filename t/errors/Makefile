@@ -6,6 +6,7 @@ FILES := \
 error1.v \
 sub.v \
 werror.v \
+include.v \
 
 # Build options
 

@@ -1,0 +1,8 @@
+`include "missing.vh"
+
+@Module -v2k;
+
+assign o = i;
+assign o2 = `MISSING_MACRO;
+
+endmodule

@@ -1,0 +1,6 @@
+ERROR: Couldn't find include file missing.vh
+ERROR: Undefined text macro, or unsupported compiler directive `MISSING_MACRO
+ERROR: While reading first pass output:
+       Parse error at ; on line 6
+Exiting after connectivity analysis due to errors
+Preprocessor output has been saved in include.v.preprocessed

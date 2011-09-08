@@ -2,14 +2,21 @@
 
 @Wires;
 
+// 1. regex connect to modify a prefix
+
 @Instance submod s0
     -connect /^vector_/ vec_s0_
 ;
 
-//
+// 1. connection to a constant value
+// 2. regex connect with capture group
 
 @Instance submod s1
+    -connect vector_i 16'h1234
+    -connect scalar_i 1'b1
     -connect (.*)_o s1_${1}
 ;
 
 endmodule
+
+// vim: sts=4 sw=4 et

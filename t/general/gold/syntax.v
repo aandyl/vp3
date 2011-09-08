@@ -103,6 +103,7 @@ always @(posedge clk)
 
 syntax_sub sub0 (.oport(oport[1:0]), .iport(iport[1:0]));
 
+// Test null connects
 //|@Instance syntax_sub sub1 -connect oport "" -connect iport "" ;
 syntax_sub sub1 (
  .oport()

@@ -2591,7 +2591,6 @@ sub VP3::Preprocessor::standard::_eval
     use base 'VP3::ParseTree::vp3_directive';
 
     use Getopt::Long;
-    use Text::ParseWords qw(shellwords);
 
     sub new
     {
@@ -2602,8 +2601,7 @@ sub VP3::Preprocessor::standard::_eval
         $self->{renames} = [ ];
 
         my $text = $self->directive_text;
-        local (@ARGV) = shellwords ($text);
-        shift @ARGV if @ARGV && $ARGV[0] eq "";
+        local (@ARGV) = VP3::Utils::directive_words ($text);
 
         my $odd;
         my $rv = GetOptions ("connect=s{2}" => sub {
@@ -2639,7 +2637,6 @@ sub VP3::Preprocessor::standard::_eval
     use base 'VP3::ParseTree::vp3_directive';
 
     use Getopt::Long;
-    use Text::ParseWords qw(shellwords);
 
     sub new
     {
@@ -2652,8 +2649,7 @@ sub VP3::Preprocessor::standard::_eval
 
         my $text = $self->directive_text;
 
-        local (@ARGV) = shellwords ($text);
-        shift @ARGV if @ARGV && $ARGV[0] eq "";
+        local (@ARGV) = VP3::Utils::directive_words ($text);
 
         my $rv = GetOptions (v2k => \$self->{v2k});
         $rv or do {
@@ -2798,7 +2794,8 @@ sub VP3::Preprocessor::standard::_eval
         }
 
         my $I;
-        $rtn .= VP3::Utils::directive_comment ($target, \$I);
+        my $dtext = VP3::Utils::directive_comment ($target, \$I);
+        $rtn .= $dtext;
 
         my $ports;
         if ($target->file) {
@@ -2830,10 +2827,13 @@ sub VP3::Preprocessor::standard::_eval
             }
 
             my $range = "";
-            # If it's not a null connect, and the hiconn expr doesn't already
-            # contain brackets, and the loconn is a vector, then add the range
-            # to the hiconn expr
-            if (length ($cxn) && $cxn !~ /[][]/ && defined ($msb)) {
+            # If the hiconn is an identifier (as opposed to an expression), and
+            # the loconn is a vector, then add the range of the loconn vector
+            # to the hiconn identifier
+            if ($cxn =~ /^(?:
+                             (?:[a-zA-Z_][a-zA-Z0-9_\$]*)   # identifier
+                            |(?:\\[^\s]+\s)                 # escaped identifier
+                          )$/x && defined ($msb)) {
                 $range = "[" . $msb . ":" . $lsb . "]";
             }
             $rtn .= "${I}${comma}.$name($cxn$range)\n";
@@ -2841,9 +2841,15 @@ sub VP3::Preprocessor::standard::_eval
         } for @{$ports->all_ports}; # VP3::Ports
         $rtn .= "${I});\n";
 
+        # Errors here are a bit tricky. If the error results from verilog we
+        # generated, then that can be considered a fatal error. If the error
+        # results from something the user put in a port connect expression,
+        # then it's a normal error.
         my ($tree, $error);
-        $tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $rtn, \$error)
-            or VP3::fatal ("While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn");
+        unless ($tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $rtn, \$error)) {
+            VP3::error ("While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn");
+            return VP3::ParseTree->factory ("whitespace", $dtext);
+        }
 
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
@@ -3221,6 +3227,47 @@ sub VP3::Preprocessor::standard::_eval
         $$indent_ref = $indent if $indent_ref;
 
         $front . $self . $back;
+    }
+
+    # Word splitting for directive arguments.
+    #  * words are separated by white space
+    #  * white space within double quotes is ignored
+    #  * a double quote within double quotes may be specified by backslash-escaping it
+    #  * single quotes do not have special treatment
+    sub directive_words
+    {
+        my $text = $_[0];
+
+        $text =~ s/^\s*//;
+        $text =~ s/\s*$//;
+
+        my $word = "";
+        my @rtn;
+
+        while ($text =~ m/\G
+                          (?:
+                               ([^"\s]+)            # anything other than quote or whitespace
+                              |(?:                  # a quoted section, which:
+                                  "                 #   starts with a quote,
+                                  ((?:\\"|[^"])*)   #   contains backslash-escaped quotes or non-quote chars, and
+                                  "                 #   ends with a quote
+                               )
+                              |(\s*)
+                          )
+                         /gsx) {
+
+            if (defined ($1))    { $word .= $1 }
+            elsif (defined ($2)) { $word .= $2 }
+            else {
+                # Process backslash-escaped quotes
+                $word =~ s/\\"/"/g;
+                push @rtn, $word;
+                $word = "";
+            }
+
+        }
+
+        @rtn;
     }
 
 } # package VP3::Utils
@@ -4132,7 +4179,10 @@ sub VP3::Preprocessor::standard::_eval
         my ($fh);
 
         my $file = VP3::find_include ($ifile);
-        $file or confess ("Couldn't find include file $ifile");
+        unless ($file) {
+            VP3::error ("Couldn't find include file $ifile");
+            return;
+        }
 
         &VP3::debug && print STDERR "Including $ifile ($file)\n";
 
