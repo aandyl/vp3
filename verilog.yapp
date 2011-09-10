@@ -139,7 +139,15 @@ pics:   pic      { f ("list_of_port_identifiers", $_[1]) }
 pic: port_identifier ',' { $_[1]->append_text ($_[2]->emit) }
      ;
 
-# 1.3 Module and Primitive Source Text
+# 1.1 Library source text
+
+# (not supported)
+
+# 1.2 Configuration source text
+
+# (not supported)
+
+# 1.3 Module and primitive source text
 
 source_text:                { f ("source_text") }
              | descriptions
@@ -167,6 +175,7 @@ module_preamble:   attr                                  # 1
                    }
                  ;
 
+# !!! should be "list_of_ports" (complex ports syntax)
 traditional_module_header:   module_preamble                       # 1
                              '(' list_of_port_identifiers ')' ';'  # 2,3,4,5
                              {
@@ -218,7 +227,9 @@ module_declaration:   traditional_module_header             # 1
 
 module_keyword: 'module' | 'macromodule' ;
 
-# 1.4 Module Parameters and Ports
+# 1.4 Module parameters and ports
+
+# !!! list_of_ports, port, port_expression, port_reference (complex ports syntax)
 
 pdp_parameter_declarations:   pdp_parameter_declaration                            { f ("list_of_parameter_declarations", $_[1]) }
                             | pdc_parameter_declarations pdp_parameter_declaration { $_[1]->append_children ($_[2]) }
@@ -257,7 +268,7 @@ port_declaration:   attr input_declaration  { $_[2]->prepend_text ($_[1]) }
                   | attr output_declaration { $_[2]->prepend_text ($_[1]) }
                   ;
 
-# 1.5 Module Items
+# 1.5 Module items
 
 opt_module_items:   { null }
                   | module_items
@@ -271,7 +282,7 @@ module_item:   port_declaration ';'             { $_[1]->append_text ($_[2]->emi
              | non_port_module_item
              ;
 
-# TODO gate_instantiation, udp_instantiation
+# !!! gate_instantiation, udp_instantiation
 module_or_generate_item:   attr module_or_generate_item_declaration   { $_[2]->prepend_text ($_[1]) }
                          | attr parameter_override                    { $_[2]->prepend_text ($_[1]) }
                          | attr continuous_assign                     { $_[2]->prepend_text ($_[1]) }
@@ -340,6 +351,11 @@ local_parameter_declaration:   'localparam'                 # 1
                                }
                              ;
 
+# PDC = Parameter Declaration + Comma
+# PDP = Parameter Declaration + (close) Paren
+# PDS = Parameter Declaration + Semicolon
+# For shift/reduce conflict avoidance, similar to the port list case explained in 2.1.2.
+
 pdc_parameter_declaration:   'parameter'                  # 1
                              opt_signed                   # 2
                              opt_range                    # 3
@@ -402,7 +418,10 @@ parameter_type: 'integer' | 'real' | 'realtime' | 'time';
 
 # PIC = Port Identifier + Comma. PIP = Port Identifer + (close) Paren
 # Needed to avoid Shift/Reduce conflict parsing ANSI C-style module headers.
-# "output a, b, input c"
+# "output a, b, input c". When the parser has consumed "b" and is looking ahead
+# at the comma, it doesn't know whether the token after the comma is another
+# identifier (in which case it should shift) or a port type keyword (in which
+# case it should reduce).
 
 # Used for inputs and inouts
 input_type:            opt_signed opt_range { f ("input_type", null , $_[1], $_[2]) }
@@ -550,10 +569,10 @@ drive_strength:   '(' strength0 ',' strength1 ')' { drive_strength (@_) }
                 ;
 
 strength0: 'supply0' | 'strong0' | 'pull0' | 'weak0'
-         ;
+           ;
 
 strength1: 'supply1' | 'strong1' | 'pull1' | 'weak1'
-         ;
+           ;
 
 #opt_charge_strength:   { null }
 #                     | charge_strength
@@ -576,6 +595,7 @@ delay3:   '#' delay_value { $_[2]->prepend_text ($_[1]); f ("delay", $_[2]) }
         | '#' '(' mintypmax_expression ',' mintypmax_expression ',' mintypmax_expression ')' { $_[3]->prepend_text ($_[2])->prepend_text ($_[1]); $_[3]->append_text ($_[4]); $_[5]->append_text ($_[6]); $_[7]->append_text ($_[8]); f ("delay", @_[3,5,7]) }
         ;
 
+# Used by gate_instantiation (3.1), udp_instantiation (5.4)
 #opt_delay2:   { null }
 #            | delay2
 #            ;
@@ -618,9 +638,12 @@ list_of_net_identifiers:   net_identifier_dimensions                            
                          | list_of_net_identifiers ',' net_identifier_dimensions { list_delim (@_[1..$#_]) }
                          ;
 
-list_of_port_identifiers:   port_identifier { VP3::ParseTree->factory ("list_of_port_identifiers", $_[1]) }
-                          | list_of_port_identifiers ',' port_identifier { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
-                          ;
+# Implementation of list_of_param_assignments is done this way for shift/reduce
+# conflict avoidance, similar to the port list case explained in 2.1.2.
+
+# PAC = Param Assignment + Comma
+# PAP = Param Assignment + (close) Paren
+# PAS = Param Assignment + Semicolon
 
 pac_param_assignment: param_assignment ',' { $_[1]->append_text ($_[2]) }
                       ;
@@ -646,6 +669,10 @@ pas_param_assignments:   pas_param_assignment                       { f ("list_o
 #list_of_param_assignments:   param_assignment                               { f ("list_of_param_assignments", $_[1]) }
 #                           | list_of_param_assignments ',' param_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
 #                           ;
+
+list_of_port_identifiers:   port_identifier                              { f ("list_of_port_identifiers", $_[1]) }
+                          | list_of_port_identifiers ',' port_identifier { list_delim (@_[1..$#_]) }
+                          ;
 
 list_of_real_identifiers:   real_type                              { f ("list_of_real_identifiers", $_[1]) }
                           | list_of_real_identifiers ',' real_type { list_delim (@_[1..$#_]) }
@@ -674,11 +701,10 @@ param_assignment: parameter_identifier '=' constant_expression { $_[1]->append_t
                 ;
 
 # !!! should be constant_mintypmax_expression
-# TODO pulse_control_specparam
 specparam_assignment:   specparam_identifier '=' constant_expression { $_[1]->append_text ($_[2]); f ("specparam_assignment", @_[1,3]) }
                       ;
 
-# pulse_control_specparam
+# !!! pulse_control_specparam
 
 # 2.5 Declaration ranges
 
@@ -910,7 +936,7 @@ block_real_type: real_identifier opt_dimensions { f ("block_real_type", @_[1,2])
 
 # 3 Primitive instances
 
-# TODO
+# !!!
 
 # 4 Module and generated instantiation
 
@@ -961,7 +987,8 @@ opt_list_of_port_connections:   { null }
                               | list_of_port_connections
                               ;
 
-# TODO ordered_port_connection
+# !!! ordered_port_connection
+
 list_of_port_connections:   named_port_connections
                           ;
 
@@ -1084,7 +1111,7 @@ opt_generate_block_identifier:   { null }
 
 # 5.1 UDP declaration
 
-# TODO
+# !!!
 udp_declaration: 'primitive' 'endprimitive'
                  ;
 
@@ -1144,7 +1171,7 @@ procedural_continuous_assignment:   'assign'   variable_assignment { f ("procedu
 
 variable_assignment: assignment;
 
-# TODO block_identifier, block_item_declarations
+# !!! block_identifier, block_item_declarations
 seq_block:   'begin' statements 'end' { f ("seq_block", $_[2])->prepend_text ($_[1])->append_text ($_[3]) }
            | 'begin' 'end'            { f ("seq_block", null)->prepend_text ($_[1])->append_text ($_[2]) }
            ;
@@ -1155,8 +1182,8 @@ statements:   statement             { f ("statements", $_[1]) }
             | statements statement  { $_[1]->append_children ($_[2]) }
             ;
 
-# !!! TODO par_block
-# !!! TODO statement attributes (shift/reduce conflict parsing task and function decls)
+# !!! par_block
+# !!! statement attributes (shift/reduce conflict parsing task and function decls)
 statement:   blocking_assignment ';'               { $_[1]->append_text ($_[2]) } # attr version: { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
            | case_statement                        # attr version: { $_[2]->prepend_text ($_[1]) }
            | conditional_statement                 # attr version: { $_[2]->prepend_text ($_[1]) }
@@ -1177,7 +1204,7 @@ statement_or_null:   statement
                    | ';'       { null->prepend_text ($_[1]) } # attr version: { null->prepend_text ($_[1])->append_text ($_[2]) }
                    ;
 
-# TODO "Limited by the rules of S10.3.4"
+# !!! "Limited by the rules of S10.3.4"
 function_statement: statement
                     ;
 
@@ -1347,7 +1374,7 @@ specify_block: 'specify' opt_specify_items 'endspecify'
                 }
                ;
 
-# TODO more
+# !!! more
 
 # 8 Expressions
 
@@ -1390,11 +1417,6 @@ conditional_expression: expression '?' attr expression ':' expression
                             f ("conditional_expression", @_[1,4,6]);
                         }
                         ;
-
-# TODO more
-#constant_expression:   constant_primary
-#                     | string
-#                     ;
 
 # !!! to enforce elsewhere
 constant_expression: expression;
@@ -1495,14 +1517,14 @@ lvalue:   hierarchical_identifier
         | '{' lvalues '}' { $_[2]->prepend_text ($_[1])->append_text ($_[3]); }
         ;
 
-# TODO
+# !!!
 #net_lvalue:   net_identifier
 #            ;
 #            | net_identifier '[' constant_expression ']'
 #            | net_identifier '[' msb_constant_expression ':' lsb_constant_expression ']'
 #            | net_concatenation
 
-# TODO
+# !!!
 #variable_lvalue: variable_identifier;
 
 # 8.6 Operators
@@ -1577,7 +1599,7 @@ genvar_identifier: IDENTIFIER;
 hierarchical_event_identifier: hierarchical_identifier;
 hierarchical_function_identifier: hierarchical_identifier;
 
-# TODO Arrayed instances
+# !!! Arrayed instances
 hierarchical_identifier_piece:   IDENTIFIER '.' { $_[1]->append_text ($_[2]) }
                                ;
 
