@@ -276,11 +276,11 @@ opt_module_items:   { null }
                   | module_items
                   ;
 
-module_items:   module_item { VP3::ParseTree->factory ("module_items", $_[1]) }
-              | module_items module_item { $_[1]->append_children ($_[2]) }
+module_items:   module_item              { f ("module_items", $_[1]) }
+              | module_items module_item { list (@_[1..$#_]) }
               ;
 
-module_item:   port_declaration ';'             { $_[1]->append_text ($_[2]->emit) }
+module_item:   port_declaration ';'             { $_[1]->append_text ($_[2]) }
              | non_port_module_item
              ;
 
@@ -492,18 +492,21 @@ output_declaration:   'output' output_type list_of_port_identifiers { $_[0]->dec
 
 # 2.1.3 Type declarations
 
-event_declaration: 'event' list_of_event_identifiers ';' { $_[0]->decl (f ("event_declaration", @_[1..$#_])) }
-                 ;
+event_declaration: 'event' list_of_event_identifiers ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]);
+                                                           $_[0]->decl (f ("event_declaration", $_[2])) }
+                   ;
 
 genvar_declaration: 'genvar' list_of_genvar_identifiers ';'
                     {
                         $_[2]->prepend_text ($_[1]);
                         $_[2]->append_text ($_[3]);
-                        $_[0]->decl (f ("genvar_declaration", $_[2])) }
+                        $_[0]->decl (f ("genvar_declaration", $_[2]))
+                    }
                     ;
 
-integer_declaration: 'integer' list_of_variable_identifiers ';' { $_[0]->decl (f ("integer_declaration", @_[1..$#_])) }
-                   ;
+integer_declaration: 'integer' list_of_variable_identifiers ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]);
+                                                                  $_[0]->decl (f ("integer_declaration", $_[2])) }
+                     ;
 
 vectored_or_scalared:   'vectored'
                       | 'scalared'
@@ -535,11 +538,21 @@ net_declaration: net_type                                     opt_signed       o
                | 'trireg' drive_strength                 vectored_or_scalared opt_signed range opt_delay3 list_of_net_decl_assignments ';' { $_[2]->prepend_text ($_[1]); $_[7]->append_text ($_[8]); $_[0]->decl (f ("trireg_declaration", $_[2],  null, $_[3], $_[4], $_[5], $_[6], $_[7])) }
                ;
 
-real_declaration: 'real' list_of_real_identifiers ';' { $_[0]->decl (f ("real_declaration", @_[1..$#_])) }
-                ;
+real_declaration: 'real' list_of_real_identifiers ';'
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[2]->append_text ($_[3]);
+                        $_[0]->decl (f ("real_declaration", $_[2]))
+                    }
+                  ;
 
-realtime_declaration: 'realtime' list_of_real_identifiers ';' { $_[0]->decl (f ("realtime_declaration", @_[1..$#_])) }
-                    ;
+realtime_declaration: 'realtime' list_of_real_identifiers ';'
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[2]->append_text ($_[3]);
+                        $_[0]->decl (f ("realtime_declaration", $_[2]))
+                    }
+                      ;
 
 reg_declaration:   'reg' opt_signed opt_range list_of_variable_identifiers ';'
                    {
@@ -549,8 +562,15 @@ reg_declaration:   'reg' opt_signed opt_range list_of_variable_identifiers ';'
                    }
                  ;
 
-time_declaration: 'time' list_of_variable_identifiers ';' { $_[0]->decl (f ("time_declaration", @_[1..$#_])) }
-                ;
+time_declaration: 'time' list_of_variable_identifiers ';'
+                  {
+                      $_[2]->prepend_text ($_[1]);
+                      $_[2]->append_text ($_[3]);
+                      $_[0]->decl (f ("time_declaration", $_[2]))
+                  }
+                  ;
+
+# 2.2 Declaration data types
 
 # 2.2.1 Net and variable types
 
@@ -630,7 +650,7 @@ delay_value:   UNSIGNED_NUMBER
 # 2.3 Declaration lists
 
 list_of_defparam_assignments:   defparam_assignment                                  { f ("list_of_defparam_assignments", $_[1]) }
-                              | list_of_defparam_assignments ',' defparam_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
+                              | list_of_defparam_assignments ',' defparam_assignment { list_delim (@_[1..$#_]) }
                               ;
 
 event_identifier_dimensions: event_identifier opt_dimensions { f ("event_identifier_dimensions", @_[1..$#_]) }
@@ -641,11 +661,11 @@ list_of_event_identifiers:   event_identifier_dimensions                        
                            ;
 
 list_of_genvar_identifiers:   genvar_identifier                                 { f ("list_of_genvar_identifiers", $_[1]) }
-                            | list_of_genvar_identifiers ',' genvar_identifier  { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
+                            | list_of_genvar_identifiers ',' genvar_identifier  { list_delim (@_[1..$#_]) }
                             ;
 
 list_of_net_decl_assignments:   net_decl_assignment                                  { f ("list_of_net_decl_assignments", $_[1]) }
-                              | list_of_net_decl_assignments ',' net_decl_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
+                              | list_of_net_decl_assignments ',' net_decl_assignment { list_delim (@_[1..$#_]) }
                               ;
 
 net_identifier_dimensions: net_identifier opt_dimensions { f ("net_identifier_dimensions", @_[1..$#_]) }
@@ -666,7 +686,7 @@ pac_param_assignment: param_assignment ',' { $_[1]->append_text ($_[2]) }
                       ;
 
 pac_param_assignments:   pac_param_assignment                       { f ("list_of_param_assignments", $_[1]) }
-                       | pac_param_assignments pac_param_assignment { $_[1]->append_children ($_[2]) }
+                       | pac_param_assignments pac_param_assignment { list (@_[1..$#_]) }
                        ;
 
 pap_param_assignment: param_assignment ')' { $_[1]->append_text ($_[2]) }

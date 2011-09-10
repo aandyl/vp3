@@ -2220,7 +2220,7 @@ sub VP3::Preprocessor::standard::_eval
     use base 'VP3::ParseTree';
 
     use constant {
-        LIST_OF_VARIABLE_IDENTIFIERS => 1,
+        LIST_OF_VARIABLE_IDENTIFIERS => 0,
     };
 
     sub decls
