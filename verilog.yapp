@@ -251,20 +251,22 @@ list_of_port_declarations:   ')'                                        { f ("li
                            | pic_port_declarations pip_port_declaration { $_[1]->append_children ($_[2])                           }
                            ;
 
-pip_port_declaration:   pip_input_declaration
-                      | pip_output_declaration
+pip_port_declaration:   attr pip_inout_declaration  { $_[2]->prepend_text ($_[1]) }
+                      | attr pip_input_declaration  { $_[2]->prepend_text ($_[1]) }
+                      | attr pip_output_declaration { $_[2]->prepend_text ($_[1]) }
                       ;
 
 pic_port_declarations:   pic_port_declaration                       { f ("list_of_port_declarations", $_[1]) }
                        | pic_port_declarations pic_port_declaration { $_[1]->append_children ($_[2]) }
                        ;
 
-pic_port_declaration:   pic_input_declaration
-                      | pic_output_declaration
+pic_port_declaration:   attr pic_inout_declaration  { $_[2]->prepend_text ($_[1]) }
+                      | attr pic_input_declaration  { $_[2]->prepend_text ($_[1]) }
+                      | attr pic_output_declaration { $_[2]->prepend_text ($_[1]) }
                       ;
 
-port_declaration:   attr input_declaration  { $_[2]->prepend_text ($_[1]) }
-                  | attr inout_declaration  { $_[2]->prepend_text ($_[1]) }
+port_declaration:   attr inout_declaration  { $_[2]->prepend_text ($_[1]) }
+                  | attr input_declaration  { $_[2]->prepend_text ($_[1]) }
                   | attr output_declaration { $_[2]->prepend_text ($_[1]) }
                   ;
 
@@ -445,6 +447,21 @@ pic_input_declaration: 'input' input_type pics { $_[0]->decl (f ("input_declarat
 
 input_declaration: 'input' input_type list_of_port_identifiers { $_[0]->decl (f ("input_declaration", @_[1..$#_])) }
                    ;
+
+pip_inout_declaration:   'inout' input_type pip
+                         {
+                             $_[3] = f ("list_of_port_identifiers", $_[3]);
+                             $_[0]->decl (f ("inout_declaration", @_[1..3]));
+                         }
+                       | 'inout' input_type pics pip
+                         {
+                             $_[3]->append_children ($_[4]);
+                             $_[0]->decl (f ("inout_declaration", @_[1..3]));
+                         }
+                       ;
+
+pic_inout_declaration: 'inout' input_type pics { $_[0]->decl (f ("inout_declaration", @_[1..$#_])); }
+                       ;
 
 inout_declaration: 'inout' input_type list_of_port_identifiers { $_[0]->decl (f ("inout_declaration", @_[1..$#_])) }
                    ;
