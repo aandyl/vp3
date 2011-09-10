@@ -759,7 +759,7 @@ sub VP3::Preprocessor::standard::_eval
         #print STDERR "working on $ident: " . $range->emit_self . " (" . $range->type . ")\n";
 
         # duplicates visit_named_port_connection
-        if ($range->typeis ("simple_number")) {
+        if ($range->typeis ("unsigned_number")) {
             my $bit = VP3::Expression::evaluate (undef, $range);
             $bit =~ /^\d+$/ or die "Unsupported complex expression in range: $bit"; # !!!
             $conn->msb ($bit);
@@ -870,7 +870,7 @@ sub VP3::Preprocessor::standard::_eval
             my $loconn_msb = $self->{inst_ports}{$ident}{msb};
             my $loconn_lsb = $self->{inst_ports}{$ident}{lsb};
 
-            if ($range->typeis ("simple_number")) {
+            if ($range->typeis ("unsigned_number")) {
                 # Single bit range specification
 
                 my $bit = VP3::Expression::evaluate (undef, $range);
@@ -1012,14 +1012,14 @@ sub VP3::Preprocessor::standard::_eval
 
     }
 
-    sub eval_simple_number
+    sub eval_unsigned_number
     {
         my $value = $_[1]->emit_self;
 
         $value =~ tr/_//d;
 
         # Could check against /\d+/ at this point, but that's the definition of
-        # a simple_number in the lexer, so hopefully not necessary
+        # an unsigned_number in the lexer, so hopefully not necessary
 
         $value;
     }
@@ -3712,7 +3712,7 @@ sub VP3::Preprocessor::standard::_eval
         |(")                                        # $14: string
         |(?i:'(s)?([bodh])(\s*)
           ([0-9a-fxz?][0-9a-fxz?_]*))               # $15, $16, $17, $18: based number
-        |([0-9][0-9_]*)                             # $19: simple number
+        |([0-9][0-9_]*)                             # $19: unsigned number
         |($ktok)                                    # $20: keywords
         |($otok)                                    # $21: operator tokens
         |([a-zA-Z_][a-zA-Z0-9_\$]*)                 # $22: identifier
@@ -4072,9 +4072,9 @@ sub VP3::Preprocessor::standard::_eval
 
                 } elsif (defined ($19)) {
 
-                    $tobj = VP3::ParseTree->factory ("simple_number", $19);
+                    $tobj = VP3::ParseTree->factory ("unsigned_number", $19);
                     $self->token ($tobj);
-                    return ('SIMPLE_NUMBER', $tobj);
+                    return ('UNSIGNED_NUMBER', $tobj);
 
                 } elsif ($20) {
 

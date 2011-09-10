@@ -88,9 +88,8 @@
 %left  '**'
 
 # Shift/reduce conflict in rule "conditional_statement"
-# Shift/reduce conflict in rule "number"
 # Shift/reduce conflict in rule "generate_conditional_statement"
-%expect 3
+%expect 2
 
 %start vp3_parse_start
 
@@ -586,8 +585,8 @@ delay3:   '#' delay_value { $_[2]->prepend_text ($_[1]); f ("delay", $_[2]) }
 #        | '#' '(' mintypmax_expression ',' mintypmax_expression ')'
 #        ;
 
-# !!! should not accept based numbers
-delay_value:   number
+delay_value:   UNSIGNED_NUMBER
+             | real_number
              | IDENTIFIER
              ;
 
@@ -1518,25 +1517,22 @@ unary_operator: '+' | '-' | '!' | '~' | '&' | '~&' | '|' | '~|' | '^' | '~^' | '
 
 # 8.7 Numbers
 
-# FIXME this is not right, reals shouldn't get lumped in here. Done this way to
-# avoid shift/reduce conflict. Probably need to move this into the lexer. Some
-# uses want to accept only unsized integers too.
+# This rule combines the decimal/octal/binary/hex_number rules in the spec.
+# There is currently a shift/reduce conflict when the parser has shifted an
+# UNSIGNED_NUMBER and the next token is a BASED_NUMBER, but it is correctly
+# resolved as shift.
 
-# There is currently a shift/reduce conflict in this rule when the parser has
-# shifted a SIMPLE_NUMBER and the next token is a BASED_NUMBER, but it is
-# correctly resolved as shift.
-
-number:   'SIMPLE_NUMBER'
-        | 'BASED_NUMBER'
-        | 'SIMPLE_NUMBER' 'BASED_NUMBER'    { $_[2]->prepend_text ($_[1]);
-                                              $_[2]->width (VP3::Expression::eval_simple_number (undef, $_[1]));
-                                              $_[2] }
+number:   UNSIGNED_NUMBER
+        | BASED_NUMBER
+        | UNSIGNED_NUMBER BASED_NUMBER  { $_[2]->prepend_text ($_[1]);
+                                          $_[2]->width (VP3::Expression::eval_unsigned_number (undef, $_[1]));
+                                          $_[2] }
         | real_number
         ;
 
-real_number:   'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER'                               { $_[1]->append_text ($_[2]);                              f ("real_number", $_[1], $_[3],  null,  null) }
-             | 'SIMPLE_NUMBER'                     exp opt_sign 'SIMPLE_NUMBER'  {                             $_[3]->prepend_text ($_[2]); f ("real_number", $_[1],  null, $_[3], $_[4]) }
-             | 'SIMPLE_NUMBER' '.' 'SIMPLE_NUMBER' exp opt_sign 'SIMPLE_NUMBER'  { $_[1]->append_text ($_[2]); $_[5]->prepend_text ($_[4]); f ("real_number", $_[1], $_[3], $_[5], $_[6]) }
+real_number:   UNSIGNED_NUMBER '.' UNSIGNED_NUMBER                               { $_[1]->append_text ($_[2]);                              f ("real_number", $_[1], $_[3],  null,  null) }
+             | UNSIGNED_NUMBER                     exp opt_sign UNSIGNED_NUMBER  {                             $_[3]->prepend_text ($_[2]); f ("real_number", $_[1],  null, $_[3], $_[4]) }
+             | UNSIGNED_NUMBER '.' UNSIGNED_NUMBER exp opt_sign UNSIGNED_NUMBER  { $_[1]->append_text ($_[2]); $_[5]->prepend_text ($_[4]); f ("real_number", $_[1], $_[3], $_[5], $_[6]) }
              ;
 
 exp: 'e' | 'E' ;
@@ -1665,8 +1661,8 @@ vp3_instance_directive: '@Instance'
                         }
                       ;
 
-vp3_vector_directive: '@Vector' SIMPLE_NUMBER IDENTIFIER ';' { $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]);
-                                                               f ("vp3_vector_directive", @_[2,3]) }
+vp3_vector_directive: '@Vector' UNSIGNED_NUMBER IDENTIFIER ';' { $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]);
+                                                                 f ("vp3_vector_directive", @_[2,3]) }
                     ;
 
 vp3_force_directive:   '@Input' IDENTIFIER ';' { $_[2]->prepend ($_[1]); $_[2]->append ($_[3]);
