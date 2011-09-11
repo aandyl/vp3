@@ -1561,6 +1561,12 @@ sub VP3::Preprocessor::standard::_eval
         $_[0];
     }
 
+    sub prepend_children
+    {
+        unshift @{$_[0]->{children}}, @_[1..$#_];
+        $_[0];
+    }
+
     sub append_children
     {
         push @{$_[0]->{children}}, @_[1..$#_];
