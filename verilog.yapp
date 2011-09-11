@@ -117,6 +117,10 @@ opt_expression:   { null }
                 | expression
                 ;
 
+opt_bracket_expression:   { null }
+                        | bracket_expression
+                        ;
+
 bracket_expression: '[' expression ']'                          { $_[2]->prepend_text ($_[1])->append_text ($_[3]); f ("subscripts", $_[2]) }
                   ;
 
@@ -1263,28 +1267,36 @@ procedural_continuous_assignment:   'assign'   variable_assignment { f ("procedu
                                   | 'release'  lvalue              { f ("procedural_continuous_assignment", @_[2,3]) } 
                                   ;
 
-#function_blocking_assignment:
-#function_statement_or_null:
-
-# 6.3 Parallel and sequential blocks
-
 #variable_assignment: variable_lvalue '=' expression
 #                   ;
 
 variable_assignment: assignment;
 
-# !!! block_identifier, block_item_declarations
-seq_block:   'begin' statements 'end' { f ("seq_block", $_[2])->prepend_text ($_[1])->append_text ($_[3]) }
-           | 'begin' 'end'            { f ("seq_block", null)->prepend_text ($_[1])->append_text ($_[2]) }
+# 6.3 Parallel and sequential blocks
+
+opt_block_identifier_and_declarations:                                                    { null }
+                                       | ':' block_identifier opt_block_item_declarations {
+                                                                                              $_[2]->prepend_text ($_[1]);
+                                                                                              f ("block_identifier_and_declarations", $_[2], $_[3])
+                                                                                          }
+                                       ;
+
+par_block: 'fork' opt_block_identifier_and_declarations opt_statements 'join' { f ("par_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
+           ;
+
+seq_block: 'begin' opt_block_identifier_and_declarations opt_statements 'end' { f ("seq_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
            ;
 
 # 6.4 Statements
+
+opt_statements:   { null }
+                | statements
+                ;
 
 statements:   statement             { f ("statements", $_[1]) }
             | statements statement  { $_[1]->append_children ($_[2]) }
             ;
 
-# !!! par_block
 # !!! statement attributes (shift/reduce conflict parsing task and function decls)
 statement:   blocking_assignment ';'               { $_[1]->append_text ($_[2]) } # attr version: { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
            | case_statement                        # attr version: { $_[2]->prepend_text ($_[1]) }
@@ -1293,6 +1305,7 @@ statement:   blocking_assignment ';'               { $_[1]->append_text ($_[2]) 
            | event_trigger
            | loop_statement
            | nonblocking_assignment ';'            { $_[1]->append_text ($_[2]) }
+           | par_block
            | procedural_continuous_assignment ';'  { $_[1]->append_text ($_[2]) }
            | procedural_timing_control_statement
            | seq_block                             # attr version: { $_[2]->prepend_text ($_[1]) }
@@ -1351,9 +1364,9 @@ event_control:   '@' event_identifier           { $_[2]->prepend_text ($_[1]); f
                | '@' '('   '*)'                 { f ("wildcard_event_control")->prepend_text ($_[1])->append_text ($_[2])->append_text ($_[3]) }
                ;
 
-# !!! identifier is allowed to be an array in which case this has subscripts
-event_trigger: '->' hierarchical_event_identifier ';' { $_[2]->prepend_text ($_[1])->append_text ($_[3]);
-                                                        f ("event_trigger", $_[2]) }
+event_trigger: '->' hierarchical_event_identifier opt_bracket_expression ';' { $_[2]->prepend_text ($_[1]);
+                                                                               $_[3]->append_text ($_[4]);
+                                                                               f ("event_trigger", $_[2], $_[3]) }
                ;
 
 event_expressions:   event_expression                         { f ("event_expressions", $_[1]) }
@@ -1504,6 +1517,7 @@ specify_output_terminal_descriptor:   identifier                          { f ("
 # 8.1 Concatenations
 
 # !!! constant_* forms (or check elsewhere)
+# !!! module_path forms (for specify blocks)
 
 concatenation: '{' expressions '}' { $_[2]->prepend_text ($_[1]); $_[2]->append_text ($_[3]); f ("concatenation", $_[2]) }
                ;
@@ -1619,7 +1633,7 @@ width_constant_expression: constant_expression;
 # 8.4 Primaries
 
 #constant_primary:   number
-#                  ; # FIXME
+#                  ; # !!!
 
 primary:   number
          | hierarchical_identifier
@@ -1716,6 +1730,7 @@ attr_name: IDENTIFIER
 
 # 9.3 Identifiers
 
+block_identifier: IDENTIFIER;
 function_identifier: IDENTIFIER;
 
 generate_block_identifier: IDENTIFIER;
