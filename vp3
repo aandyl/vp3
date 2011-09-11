@@ -612,6 +612,7 @@ sub VP3::Preprocessor::standard::_eval
 
         # Portions of the source that we can ignore entirely
         *visit_list_of_port_identifiers = \&ignore;
+        *visit_list_of_variable_port_identifiers = \&ignore;
         *visit_inout_declaration    = \&ignore;
         *visit_reg_declaration      = \&ignore;
         *visit_integer_declaration  = \&ignore;
@@ -2141,17 +2142,27 @@ sub VP3::Preprocessor::standard::_eval
     use base 'VP3::ParseTree';
 
     use constant {
-        OUTPUT_KEYWORD              => 0,
-        OUTPUT_TYPE                 => 1,
-        LIST_OF_PORT_IDENTIFIERS    => 2,
+        OUTPUT_KEYWORD  => 0,
+        OUTPUT_TYPE     => 1,
+        LIST            => 2,
     };
 
     sub port_names {
         my $self = shift;
         my @rtn;
 
-        for (@{$self->children->[LIST_OF_PORT_IDENTIFIERS]->children}) {
-            push @rtn, $_->emit_self;
+        my $list = $self->children->[LIST];
+
+        if ($list->typeis ("list_of_port_identifiers")) {
+            for (@{$list->children}) {
+                push @rtn, $_->emit_self;
+            }
+        } elsif ($list->typeis ("list_of_variable_port_identifiers")) {
+            for (@{$list->children}) {
+                # variable_port_identifier is an identifier and an optional
+                # (constant) assignment. !!! fix hardcoded [0]
+                push @rtn, $_->children->[0]->emit_self;
+            }
         }
 
         @rtn;
@@ -2164,9 +2175,20 @@ sub VP3::Preprocessor::standard::_eval
         my $self = shift;
         my %decls;
 
-        for (@{$self->children->[LIST_OF_PORT_IDENTIFIERS]->children}) {
-            my $ident = $_->emit_self;
-            $decls{$ident} = "output";
+        my $list = $self->children->[LIST];
+
+        if ($list->typeis ("list_of_port_identifiers")) {
+            for (@{$list->children}) {
+                my $ident = $_->emit_self;
+                $decls{$ident} = "output";
+            }
+        } elsif ($list->typeis ("list_of_variable_port_identifiers")) {
+            for (@{$list->children}) {
+                # variable_port_identifier is an identifier and an optional
+                # (constant) assignment. !!! fix hardcoded [0]
+                my $ident = $_->children->[0]->emit_self;
+                $decls{$ident} = "output";
+            }
         }
 
         %decls;

@@ -139,6 +139,16 @@ pics:   pic      { f ("list_of_port_identifiers", $_[1]) }
 pic: port_identifier ',' { $_[1]->append_text ($_[2]->emit) }
      ;
 
+vpip: variable_port_identifier ')' { $_[1]->append_text ($_[2]->emit) }
+      ;
+
+vpics:   vpic       { f ("list_of_variable_port_identifiers", $_[1]) }
+       | vpics vpic { $_[1]->append_children ($_[2]) }
+       ;
+
+vpic: variable_port_identifier ',' { $_[1]->append_text ($_[2]->emit) }
+      ;
+
 # 1.1 Library source text
 
 # (not supported)
@@ -466,28 +476,43 @@ pic_inout_declaration: 'inout' input_type pics { $_[0]->decl (f ("inout_declarat
 inout_declaration: 'inout' input_type list_of_port_identifiers { $_[0]->decl (f ("inout_declaration", @_[1..$#_])) }
                    ;
 
-output_type:                        opt_signed opt_range { f ("output_type", null , $_[1], $_[2]) }
-             | 'reg'                opt_signed opt_range { f ("output_type", $_[1], $_[2], $_[3]) }
-             | net_type             opt_signed opt_range { f ("output_type", $_[1], $_[2], $_[3]) }
-             | output_variable_type                      { f ("output_type", $_[1], null , null ) }
-             ;
+output_net_type:                        opt_signed opt_range { f ("output_type", null , $_[1], $_[2]) }
+                 | net_type             opt_signed opt_range { f ("output_type", $_[1], $_[2], $_[3]) }
+                 ;
 
-pip_output_declaration:   'output' output_type pip
+output_var_type:   'reg'                opt_signed opt_range { f ("output_type", $_[1], $_[2], $_[3]) }
+                 | 'integer'                                 { f ("output_type", $_[1], null , null ) }
+                 | 'time'                                    { f ("output_type", $_[1], null , null ) }   
+                 ;
+
+pip_output_declaration:   'output' output_net_type pip
                           {
                               $_[3] = f ("list_of_port_identifiers", $_[3]);
                               $_[0]->decl (f ("output_declaration", @_[1..3]));
                           }
-                        | 'output' output_type pics pip
+                        | 'output' output_var_type vpip
+                          {
+                              $_[3] = f ("list_of_port_identifiers", $_[3]);
+                              $_[0]->decl (f ("output_declaration", @_[1..3]));
+                          }
+                        | 'output' output_net_type pics pip
+                          {
+                              $_[3]->append_children ($_[4]);
+                              $_[0]->decl (f ("output_declaration", @_[1..3]));
+                          }
+                        | 'output' output_var_type vpics vpip
                           {
                               $_[3]->append_children ($_[4]);
                               $_[0]->decl (f ("output_declaration", @_[1..3]));
                           }
                         ;
 
-pic_output_declaration: 'output' output_type pics { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
+pic_output_declaration:   'output' output_net_type pics  { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
+                        | 'output' output_var_type vpics { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
                         ;
 
-output_declaration:   'output' output_type list_of_port_identifiers { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
+output_declaration:   'output' output_net_type list_of_port_identifiers          { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
+                    | 'output' output_var_type list_of_variable_port_identifiers { $_[0]->decl (f ("output_declaration", @_[1..$#_])) }
                     ;
 
 # 2.1.3 Type declarations
@@ -576,8 +601,7 @@ time_declaration: 'time' list_of_variable_identifiers ';'
 
 net_type: 'supply0' | 'supply1' | 'tri' | 'triand' | 'trior' | 'tri0' | 'tri1' | 'wire' | 'wand' | 'wor';
 
-output_variable_type: 'integer' | 'time'
-                    ;
+# output_variable_type replaced by slightly different output_var_type, defined in 2.1.2
 
 opt_constant_assignment:                         { null }
                        | '=' constant_expression { $_[2]->prepend_text ($_[1]) }
@@ -723,7 +747,12 @@ list_of_variable_identifiers: variable_type                                  { f
                             | list_of_variable_identifiers ',' variable_type { list_delim (@_[1..$#_]) }
                             ;
 
-# TODO list_of_variable_port_identifiers? (or is it replaced by something?)
+variable_port_identifier: port_identifier opt_constant_assignment { f ("variable_port_identifier", @_[1,2]) }
+                          ;
+
+list_of_variable_port_identifiers:   variable_port_identifier                                       { f ("list_of_variable_port_identifiers", $_[1]) }
+                                   | list_of_variable_port_identifiers ',' variable_port_identifier { list_delim (@_[1..$#_]) }
+                                   ;
 
 # 2.4 Declaration assignments
 
