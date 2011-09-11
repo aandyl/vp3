@@ -180,12 +180,16 @@ description:   module_declaration
 module_preamble:   attr                                  # 1
                    module_keyword                        # 2
                    module_identifier                     # 3
-                   opt_module_parameter_port_list        # 4
                    {
                        $_[2]->prepend_text ($_[1]);
-                       my $obj = f ("module_declaration", @_[2,3,4]);
+                       my $obj = f ("module_declaration", @_[2,3]);
                        $_[0]->scope ($obj);
                        $obj;
+                   }                                     # 4
+                   opt_module_parameter_port_list        # 5
+                   {
+                       $_[4]->append_children ($_[5]);
+                       $_[4];
                    }
                  ;
 

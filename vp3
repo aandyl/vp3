@@ -704,6 +704,8 @@ sub VP3::Preprocessor::standard::_eval
         my ($self, $target) = @_;
 
         my $ident = $target->emit_self;
+        # !!! shouldn't assume the module is the scope, need to push/pop scopes
+        # as we go (assumed scope)
         my $sym   = $self->{module}->symtab->lookup ($ident);
         $sym && $sym->type eq "parameter" and return;
 
@@ -742,6 +744,7 @@ sub VP3::Preprocessor::standard::_eval
 
         # parameters don't generate connectivity
         my $ident = $target->identifier->emit_self;
+        # !!! assumed scope
         my $sym  = $self->{module}->symtab->lookup ($ident);
         $sym && $sym->type eq "parameter" and return;
 
@@ -761,15 +764,15 @@ sub VP3::Preprocessor::standard::_eval
 
         # duplicates visit_named_port_connection
         if ($range->typeis ("unsigned_number")) {
-            my $bit = VP3::Expression::evaluate (undef, $range);
+            my $bit = VP3::Expression::evaluate ($self->{module}, $range); # !!! assumed scope
             $bit =~ /^\d+$/ or die "Unsupported complex expression in range: $bit"; # !!!
             $conn->msb ($bit);
             $conn->lsb ($bit);
         } elsif ($range->typeis ("range_expression_colon")) {
             # MSB:LSB range specification
 
-            my $msb = $range->evaluate_msb (undef);
-            my $lsb = $range->evaluate_lsb (undef);
+            my $msb = $range->evaluate_msb ($self->{module}); # !!! assumed scope
+            my $lsb = $range->evaluate_lsb ($self->{module}); # !!! assumed scope
 
             $conn->msb ($msb);
             $conn->lsb ($lsb);
@@ -831,6 +834,8 @@ sub VP3::Preprocessor::standard::_eval
 
         my $ports = VP3::ports ($inst_module);
 
+        # !!! should we fail if we don't get the ports?
+
         if ($ports) {
             $self->{source_type}  = "net";
             $self->{inst_ports}   = $ports;
@@ -874,7 +879,7 @@ sub VP3::Preprocessor::standard::_eval
             if ($range->typeis ("unsigned_number")) {
                 # Single bit range specification
 
-                my $bit = VP3::Expression::evaluate (undef, $range);
+                my $bit = VP3::Expression::evaluate ($self->{module}, $range); # !!! assumed scope
                 $bit =~ /^\d+$/ or die "Unsupported complex expression in range: $bit"; # !!!
                 if (!defined ($loconn_msb)) {
                     # single-bit vector connected to scalar, this is ok
@@ -887,11 +892,11 @@ sub VP3::Preprocessor::standard::_eval
             } elsif ($range->typeis ("range_expression_colon")) {
                 # MSB:LSB range specification
 
-                my $hiconn_msb = $range->evaluate_msb (undef);
-                my $hiconn_lsb = $range->evaluate_lsb (undef);
+                my $hiconn_msb = $range->evaluate_msb ($self->{module}); # !!! assumed scope
+                my $hiconn_lsb = $range->evaluate_lsb ($self->{module}); # !!! assumed scope
 
                 defined ($hiconn_msb) && defined ($loconn_msb) && defined ($hiconn_lsb) && defined ($loconn_lsb)
-                    or do { no warnings 'uninitialized'; die "Undefined range value in connection of $ident, hiconn $hiconn_msb:$hiconn_lsb, loconn $loconn_msb:$loconn_lsb"; }; # !!!
+                    or do { no warnings 'uninitialized'; die "Undefined range value in connection of `$ident', hiconn $hiconn_msb:$hiconn_lsb, loconn $loconn_msb:$loconn_lsb"; }; # !!!
 
                 my $hiconn_width = $hiconn_msb >= $hiconn_lsb ? $hiconn_msb - $hiconn_lsb + 1 : $hiconn_lsb - $hiconn_msb + 1;
                 my $loconn_width = $loconn_msb >= $loconn_lsb ? $loconn_msb - $loconn_lsb + 1 : $loconn_lsb - $loconn_msb + 1;
@@ -1007,7 +1012,7 @@ sub VP3::Preprocessor::standard::_eval
         if ($sym && $sym->type eq "parameter") {
             return evaluate ($scope, $sym->data);
         } else {
-            VP3::error ("Unable to evaluate `$ident'");
+            VP3::warning ($ident_obj->location . ": unable to evaluate `$ident'");
             return undef;
         }
 
@@ -1031,6 +1036,9 @@ sub VP3::Preprocessor::standard::_eval
 
         my $lval = evaluate ($scope, $binop->left);
         my $rval = evaluate ($scope, $binop->right);
+
+        defined ($lval) && defined ($rval) or return undef;
+
         my $op = $binop->op;
 
         $op eq '+' && return $lval + $rval;
@@ -1869,6 +1877,8 @@ sub VP3::Preprocessor::standard::_eval
                     if ($_->input_type->opt_range->typeis ("range")) {
                         $msb = VP3::Expression::evaluate ($self, $_->input_type->opt_range->msb);
                         $lsb = VP3::Expression::evaluate ($self, $_->input_type->opt_range->lsb);
+                        defined $msb && defined $lsb
+                            or return undef;
                     }
                     for ($_->port_names) {
                         #$bports{$_} = { name => $_, dir => "input", msb => $msb, lsb => $lsb };
@@ -1882,6 +1892,8 @@ sub VP3::Preprocessor::standard::_eval
                     if ($_->output_type->opt_range->typeis ("range")) {
                         $msb = VP3::Expression::evaluate ($self, $_->output_type->opt_range->msb);
                         $lsb = VP3::Expression::evaluate ($self, $_->output_type->opt_range->lsb);
+                        defined $msb && defined $lsb
+                            or return undef;
                     }
                     for ($_->port_names) {
                         #$bports{$_} = { name => $_, dir => "output", msb => $msb, lsb => $lsb };
@@ -1911,6 +1923,8 @@ sub VP3::Preprocessor::standard::_eval
                     if ($_->input_type->opt_range->typeis ("range")) {
                         $msb = VP3::Expression::evaluate ($self, $_->input_type->opt_range->msb);
                         $lsb = VP3::Expression::evaluate ($self, $_->input_type->opt_range->lsb);
+                        defined $msb && defined $lsb
+                            or return undef;
                     }
                     for ($_->port_names) {
                         $bports->add (VP3::Port->new (name => $_, dir => &VP3::Port::DIR_INPUT, msb => $msb, lsb => $lsb));
@@ -1923,6 +1937,8 @@ sub VP3::Preprocessor::standard::_eval
                     if ($_->output_type->opt_range->typeis ("range")) {
                         $msb = VP3::Expression::evaluate ($self, $_->output_type->opt_range->msb);
                         $lsb = VP3::Expression::evaluate ($self, $_->output_type->opt_range->lsb);
+                        defined $msb && defined $lsb
+                            or return undef;
                     }
                     for ($_->port_names) {
                         $bports->add (VP3::Port->new (name => $_, dir => &VP3::Port::DIR_OUTPUT, msb => $msb, lsb => $lsb));
@@ -2445,8 +2461,9 @@ sub VP3::Preprocessor::standard::_eval
             return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
         } elsif ($colon eq "+:") {
             # is this right for big-endian?
-            return VP3::Expression::evaluate ($scope, $self->children->[LHS]) +
-                   VP3::Expression::evaluate ($scope, $self->children->[RHS]) - 1;
+            my $lhs = VP3::Expression::evaluate ($scope, $self->children->[LHS]);
+            my $rhs = VP3::Expression::evaluate ($scope, $self->children->[RHS]);
+            return (defined ($lhs) && defined ($rhs)) ? $lhs + $rhs - 1 : undef;
         } elsif ($colon eq "-:") {
             # ditto the big-endian question
             return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
@@ -2469,8 +2486,9 @@ sub VP3::Preprocessor::standard::_eval
             return VP3::Expression::evaluate ($scope, $self->children->[LHS]);
         } elsif ($colon eq "-:") {
             # ditto the big-endian question
-            return VP3::Expression::evaluate ($scope, $self->children->[LHS]) -
-                   VP3::Expression::evaluate ($scope, $self->children->[RHS]) + 1;
+            my $lhs = VP3::Expression::evaluate ($scope, $self->children->[LHS]);
+            my $rhs = VP3::Expression::evaluate ($scope, $self->children->[RHS]);
+            return (defined ($lhs) && defined ($rhs)) ? $lhs - $rhs + 1 : undef;
         } else {
             # the parser shouldn't have produced anything else
             VP3::fatal ("Illegal colon token `" . $colon . "' in range_expression_colon");
@@ -2832,6 +2850,8 @@ sub VP3::Preprocessor::standard::_eval
             $ports = VP3::ports ($target->module);
         }
 
+        # This error can fire either because the module was not found or
+        # because we had a problem parsing it.
         unless ($ports) {
             VP3::error ("Can't auto-instance `" . $target->module . "' without its definition");
             return VP3::ParseTree->factory (whitespace => $target->emit);
@@ -2840,7 +2860,7 @@ sub VP3::Preprocessor::standard::_eval
         my $comma = " ";
 
         $rtn .= "${I}" . $target->module . " " . $target->instance_name . " (\n";
-        do {
+        for (@{$ports->all_ports}) { # VP3::Ports
             my $name = $_->{name};
             my $cxn  = $name;
             my $msb = $_->{msb};
@@ -2866,7 +2886,7 @@ sub VP3::Preprocessor::standard::_eval
             }
             $rtn .= "${I}${comma}.$name($cxn$range)\n";
             $comma = ",";
-        } for @{$ports->all_ports}; # VP3::Ports
+        }
         $rtn .= "${I});\n";
 
         # Errors here are a bit tricky. If the error results from verilog we
