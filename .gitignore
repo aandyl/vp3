@@ -1,7 +1,7 @@
-Makefile
-Parser.pm
-blib
-pm_to_blib
-t/*/*.v
-t/*/*.err
-t/*/*.out
+/Makefile
+/Parser.pm
+/blib
+/pm_to_blib
+/t/*/*.v
+/t/*/*.err
+/t/*/*.out
