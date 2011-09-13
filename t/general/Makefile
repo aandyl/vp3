@@ -14,6 +14,7 @@ multimod.v \
 noports.v \
 strengths.v \
 v2k_params.v \
+v2k_ports.v \
 
 # Build options
 
@@ -29,6 +30,7 @@ multimod.v \
 noports.v \
 strengths.v \
 v2k_params.v \
+v2k_ports.v \
 
 # Build exceptions
 

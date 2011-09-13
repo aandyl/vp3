@@ -1,0 +1,10 @@
+WARNING: Signal a_i has no source
+WARNING: Signal b_i has no source
+WARNING: Signal c_i has no source
+WARNING: Signal d_i has no source
+WARNING: Signal a_o has no sink
+WARNING: Signal b_o has no sink
+WARNING: Signal c_o1 has no sink
+WARNING: Signal c_o2 has no sink
+WARNING: Signal d_o1 has no sink
+WARNING: Signal d_o2 has no sink

@@ -1,0 +1,51 @@
+module subA (
+    input wire i
+  , output wire o
+);
+
+    assign o = i;
+
+endmodule
+
+module subB (
+    input wire i
+  , output reg o
+);
+
+    always @(*) o = i;
+
+endmodule
+
+module subC (
+    input wire i
+  , output wire o1, o2
+);
+
+    assign o1 = i;
+    assign o2 = i;
+
+endmodule
+
+module subD (
+    input wire i
+  , output reg o1, o2
+);
+
+    always @(*) begin
+        o1 = i;
+        o2 = i;
+    end
+
+endmodule
+
+module top ();
+
+    @Instance subA subA -connect (.*) a_$1;
+
+    @Instance subB subB -connect (.*) b_$1;
+
+    @Instance subC subC -connect (.*) c_$1;
+
+    @Instance subD subD -connect (.*) d_$1;
+
+endmodule

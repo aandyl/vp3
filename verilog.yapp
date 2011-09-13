@@ -133,24 +133,24 @@ subscripts:   bracket_expressions                                { $_[1] }
             | '[' range_expression_colon ']'                     { $_[2]->prepend_text ($_[1])->append_text ($_[3]); f ("subscripts", $_[2]) }
             ;
 
-pip: port_identifier ')' { $_[1]->append_text ($_[2]->emit) }
+pip: port_identifier ')' { $_[1]->append_text ($_[2]) }
      ;
 
 pics:   pic      { f ("list_of_port_identifiers", $_[1]) }
       | pics pic { $_[1]->append_children ($_[2]) }
       ;
 
-pic: port_identifier ',' { $_[1]->append_text ($_[2]->emit) }
+pic: port_identifier ',' { $_[1]->append_text ($_[2]) }
      ;
 
-vpip: variable_port_identifier ')' { $_[1]->append_text ($_[2]->emit) }
+vpip: variable_port_identifier ')' { $_[1]->append_text ($_[2]) }
       ;
 
 vpics:   vpic       { f ("list_of_variable_port_identifiers", $_[1]) }
        | vpics vpic { $_[1]->append_children ($_[2]) }
        ;
 
-vpic: variable_port_identifier ',' { $_[1]->append_text ($_[2]->emit) }
+vpic: variable_port_identifier ',' { $_[1]->append_text ($_[2]) }
       ;
 
 # 1.1 Library source text
@@ -500,7 +500,7 @@ pip_output_declaration:   'output' output_net_type pip
                           }
                         | 'output' output_var_type vpip
                           {
-                              $_[3] = f ("list_of_port_identifiers", $_[3]);
+                              $_[3] = f ("list_of_variable_port_identifiers", $_[3]);
                               $_[0]->decl (f ("output_declaration", @_[1..3]));
                           }
                         | 'output' output_net_type pics pip
@@ -1233,7 +1233,7 @@ continuous_assign: 'assign' opt_drive_strength opt_delay3 list_of_net_assignment
                    ;
 
 list_of_net_assignments:   net_assignment { VP3::ParseTree->factory ("list_of_net_assignments", $_[1]) }
-                         | list_of_net_assignments ',' net_assignment { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
+                         | list_of_net_assignments ',' net_assignment { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
                          ;
 
 #net_assignment: net_lvalue '=' expression
@@ -1569,7 +1569,7 @@ dimension_constant_expression: constant_expression
                                ;
 
 expressions:   expression                 { f ("expressions", $_[1]) }
-             | expressions ',' expression { $_[3]->prepend_text ($_[2]->emit); $_[1]->append_children ($_[3]) }
+             | expressions ',' expression { $_[3]->prepend_text ($_[2]); $_[1]->append_children ($_[3]) }
              ;
 
 expression:   primary
