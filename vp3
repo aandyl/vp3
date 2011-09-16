@@ -337,7 +337,7 @@ applied only to the matching part.
 This is alpha-quality software and bugs are to be expected. Please report bugs
 in the issue tracker on github.
 
-Many Verilog language constructs are not yet supported, including:
+The following Verilog constructs are not yet supported:
 
 =over 4
 
@@ -347,11 +347,30 @@ specify blocks
 
 =item *
 
+primitives (gates and UDPs)
+
+=item *
+
 text macros with arguments
 
 =item *
 
-ports connected by order
+preprocessor directives other than `timescale, `include, `define, `undef, and
+`line
+
+=item *
+
+ports connected by order (accepted by the parser but not understood for
+connectivity analysis)
+
+=item *
+
+complex ports (all the examples other than C<module test> in section 12.3.3 of
+the standard
+
+=item *
+
+instance arrays
 
 =item *
 
