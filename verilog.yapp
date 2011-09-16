@@ -832,16 +832,44 @@ range: '[' msb_constant_expression ':' lsb_constant_expression ']' { $_[2]->prep
 
 # 2.6 Function declarations
 
-function_declaration:   'function' opt_automatic opt_signed opt_range_or_type function_identifier ';'
-                        function_item_declarations
-                        function_statement
-                        'endfunction'
-                        { f ("function_declaration", @_[1..$#_]) }
-                      | 'function' opt_automatic opt_signed opt_range_or_type function_identifier '(' function_port_list ';'
-                        opt_block_item_declarations
-                        function_statement
-                        'endfunction'
-                        { f ("function_declaration", @_[1..$#_]) }
+# The second and third forms are split (rather than use an
+# opt_block_item_declarations rule) to avoid a shift/reduce conflict where the
+# parser sees the start of an attribute and doesn't know whether it is a
+# block_item_declaration or a statement.
+
+function_declaration:   'function' opt_automatic opt_signed opt_range_or_type function_identifier ';'   # 1-6
+                        function_item_declarations                                                      # 7
+                        function_statement                                                              # 8
+                        'endfunction'                                                                   # 9
+                        {
+                            $_[2]->prepend_text ($_[1]);
+                            $_[5]->append_text ($_[6]);
+                            $_[8]->append_text ($_[9]);
+                            f ("function_declaration", @_[2,3,4,5], null, @_[7,8])
+                        }
+                      | 'function' opt_automatic opt_signed opt_range_or_type function_identifier       # 1-5
+                        '(' function_port_list ';'                                                      # 6-8
+                        function_statement                                                              # 9
+                        'endfunction'                                                                   # 10
+                        {
+                            $_[2]->prepend_text ($_[1]);
+                            $_[7]->prepend_text ($_[6]);
+                            $_[7]->append_text ($_[8]);
+                            $_[9]->append_text ($_[10]);
+                            f ("function_declaration", @_[2,3,4,5,7], null, $_[9])
+                        }
+                      | 'function' opt_automatic opt_signed opt_range_or_type function_identifier       # 1-5
+                        '(' function_port_list ';'                                                      # 6-8
+                        block_item_declarations                                                         # 9
+                        function_statement                                                              # 10
+                        'endfunction'                                                                   # 11
+                        {
+                            $_[2]->prepend_text ($_[1]);
+                            $_[7]->prepend_text ($_[6]);
+                            $_[7]->append_text ($_[8]);
+                            $_[10]->append_text ($_[11]);
+                            f ("function_declaration", @_[2,3,4,5,7,9,10])
+                        }
                       ;
 
 function_item_declarations:   function_item_declaration                            { f ("function_item_declarations", $_[1]) }
@@ -883,16 +911,39 @@ range_or_type:   range
 
 # 2.7 Task declarations
 
-task_declaration:   'task' opt_automatic task_identifier ';'
-                    task_item_declarations
-                    statement_or_null
-                    'endtask'
-                    { f ("task_declaration", @_[1..$#_]) }
-                  | 'task' opt_automatic task_identifier '(' task_port_list ';'
-                    opt_block_item_declarations
-                    statement_or_null
-                    'endtask'
-                    { f ("task_declaration", @_[1..$#_]) }
+# Second and third forms are split for same reason as in function_declaration
+
+task_declaration:   'task' opt_automatic task_identifier ';'    # 1-4
+                    task_item_declarations                      # 5
+                    statement_or_null                           # 6
+                    'endtask'                                   # 7
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[3]->append_text ($_[4]);
+                        $_[6]->append_text ($_[7]);
+                        f ("task_declaration", @_[2,3], null, @_[5,6])
+                    }
+                  | 'task' opt_automatic task_identifier '(' task_port_list ';' # 1-6
+                    statement_or_null                                           # 7
+                    'endtask'                                                   # 8
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[5]->prepend_text ($_[4]);
+                        $_[5]->append_text ($_[6]);
+                        $_[7]->append_text ($_[8]);
+                        f ("task_declaration", @_[2,3,5], null, $_[7])
+                    }
+                  | 'task' opt_automatic task_identifier '(' task_port_list ';' # 1-6
+                    block_item_declarations                                     # 7
+                    statement_or_null                                           # 8
+                    'endtask'                                                   # 9
+                    {
+                        $_[2]->prepend_text ($_[1]);
+                        $_[5]->prepend_text ($_[4]);
+                        $_[5]->append_text ($_[6]);
+                        $_[8]->append_text ($_[9]);
+                        f ("task_declaration", @_[2,3,5,7,8])
+                    }
                   ;
 
 task_item_declarations:   task_item_declaration                        { f ("task_item_declarations", $_[1]) }
@@ -970,10 +1021,6 @@ task_port_type:   opt_reg opt_signed opt_range { f ("task_port_type", @_[1..$#_]
                 ;
 
 # 2.8 Block item declarations
-
-opt_block_item_declarations:   { null }
-                             | block_item_declarations
-                             ;
 
 block_item_declarations:   block_item_declaration                           { f ("block_item_declarations", $_[1]) }
                          | block_item_declarations block_item_declaration   { list (@_[1,2]) }
@@ -1278,17 +1325,18 @@ variable_assignment: assignment;
 
 # 6.3 Parallel and sequential blocks
 
-opt_block_identifier_and_declarations:                                                    { null }
-                                       | ':' block_identifier opt_block_item_declarations {
-                                                                                              $_[2]->prepend_text ($_[1]);
-                                                                                              f ("block_identifier_and_declarations", $_[2], $_[3])
-                                                                                          }
-                                       ;
+block_identifier_and_declarations:   ':' block_identifier opt_block_item_declarations {
+                                                                                          $_[2]->prepend_text ($_[1]);
+                                                                                          f ("block_identifier_and_declarations", $_[2], $_[3])
+                                                                                      }
+                                   ;
 
-par_block: 'fork' opt_block_identifier_and_declarations opt_statements 'join' { f ("par_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
+par_block:   'fork'                                   opt_statements 'join' { f ("par_block",  null, $_[2])->prepend_text ($_[1])->append_text ($_[3]) }
+           | 'fork' block_identifier_and_declarations opt_statements 'join' { f ("par_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
            ;
 
-seq_block: 'begin' opt_block_identifier_and_declarations opt_statements 'end' { f ("seq_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
+seq_block:   'begin'                                   opt_statements 'end' { f ("seq_block",  null, $_[2])->prepend_text ($_[1])->append_text ($_[3]) }
+           | 'begin' block_identifier_and_declarations opt_statements 'end' { f ("seq_block", $_[2], $_[3])->prepend_text ($_[1])->append_text ($_[4]) }
            ;
 
 # 6.4 Statements
@@ -1301,26 +1349,24 @@ statements:   statement             { f ("statements", $_[1]) }
             | statements statement  { $_[1]->append_children ($_[2]) }
             ;
 
-# !!! statement attributes (shift/reduce conflict parsing task and function decls)
-statement:   blocking_assignment ';'               { $_[1]->append_text ($_[2]) } # attr version: { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
-           | case_statement                        # attr version: { $_[2]->prepend_text ($_[1]) }
-           | conditional_statement                 # attr version: { $_[2]->prepend_text ($_[1]) }
-           | disable_statement
-           | event_trigger
-           | loop_statement
-           | nonblocking_assignment ';'            { $_[1]->append_text ($_[2]) }
-           | par_block
-           | procedural_continuous_assignment ';'  { $_[1]->append_text ($_[2]) }
-           | procedural_timing_control_statement
-           | seq_block                             # attr version: { $_[2]->prepend_text ($_[1]) }
-           | system_task_enable
-           | task_enable
-           | wait_statement
+statement:   attr blocking_assignment ';'               { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
+           | attr case_statement                        { $_[2]->prepend_text ($_[1]) }
+           | attr conditional_statement                 { $_[2]->prepend_text ($_[1]) }
+           | attr disable_statement                     { $_[2]->prepend_text ($_[1]) }
+           | attr event_trigger                         { $_[2]->prepend_text ($_[1]) }
+           | attr loop_statement                        { $_[2]->prepend_text ($_[1]) }
+           | attr nonblocking_assignment ';'            { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
+           | attr par_block                             { $_[2]->prepend_text ($_[1]) }
+           | attr procedural_continuous_assignment ';'  { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
+           | attr procedural_timing_control_statement   { $_[2]->prepend_text ($_[1]) }
+           | attr seq_block                             { $_[2]->prepend_text ($_[1]) }
+           | attr system_task_enable                    { $_[2]->prepend_text ($_[1]) }
+           | attr task_enable                           { $_[2]->prepend_text ($_[1]) }
+           | attr wait_statement                        { $_[2]->prepend_text ($_[1]) }
            ;
 
-# !!! attr (on null statement)
 statement_or_null:   statement
-                   | ';'       { null->prepend_text ($_[1]) } # attr version: { null->prepend_text ($_[1])->append_text ($_[2]) }
+                   | attr ';'       { null->prepend_text ($_[1])->append_text ($_[2]) }
                    ;
 
 # !!! "Limited by the rules of S10.3.4"
@@ -1534,6 +1580,8 @@ multiple_concatenation: '{' expression concatenation '}' { $_[2]->prepend_text (
 
 # 8.2 Function calls
 
+# !!! constant_function_call, if useful
+
 function_call:   hierarchical_function_identifier attr '(' expressions ')'
                  {
                      $_[4]->prepend_text ($_[3]);
@@ -1621,6 +1669,8 @@ mintypmax_expression:   expression
                                                                    f ("mintypmax_expression", @_[1,3,5]) }
                       ;
 
+# !!! (specify) module_path_conditional_expression, module_path_expression, module_path_mintypmax_expression
+
 msb_constant_expression : constant_expression;
 
 range_expression:   expression
@@ -1639,6 +1689,8 @@ width_constant_expression: constant_expression;
 #constant_primary:   number
 #                  ; # !!!
 
+# !!! (specify) module_path_primary
+
 primary:   number
          | hierarchical_identifier
          | hierarchical_identifier subscripts { f ("identifier_subscripts", @_[1..$#_]) }
@@ -1646,7 +1698,6 @@ primary:   number
          | multiple_concatenation
          | function_call
          | system_function_call
-#         | constant_function_call
          | '(' mintypmax_expression ')' { $_[2]->prepend_text ($_[1])->append_text ($_[3]) }
          ;
 
@@ -1675,6 +1726,7 @@ lvalue:   hierarchical_identifier
 
 unary_operator: '+' | '-' | '!' | '~' | '&' | '~&' | '|' | '~|' | '^' | '~^' | '^~' ;
 
+# subsumed by binary_operator_expression rule
 #binary_operator: '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '===' | '!==' | '&&' | '||' | '**'
 #               | '<' | '<=' | '>' | '>=' | '&' | '|' | '^' | '^~' | '~^' | '>>' | '<<' | '>>>' | '<<<' ;
 
@@ -1684,9 +1736,6 @@ unary_operator: '+' | '-' | '!' | '~' | '&' | '~&' | '|' | '~|' | '^' | '~^' | '
 # 8.7 Numbers
 
 # This rule combines the decimal/octal/binary/hex_number rules in the spec.
-# There is currently a shift/reduce conflict when the parser has shifted an
-# UNSIGNED_NUMBER and the next token is a BASED_NUMBER, but it is correctly
-# resolved as shift.
 
 number:   UNSIGNED_NUMBER
         | BASED_NUMBER
@@ -1717,6 +1766,9 @@ string: STRING
 
 # 9.1 Attributes
 
+# Everywhere that an attribute is allowed it is optional, and there are many
+# such places, so we call the rule "attr" rather than "opt_attr" for brevity.
+
 attr:   { null }
       | '(*' attr_specs '*)' { $_[2]->prepend_text ($_[1]); $_[2]->append_text ($_[3]); }
       ;
@@ -1732,14 +1784,21 @@ attr_spec:   attr_name '=' constant_expression  { $_[1]->append_text ($_[2]); f 
 attr_name: IDENTIFIER
            ;
 
+# 9.2 Comments
+
+# (handled by the preprocessor)
+
 # 9.3 Identifiers
 
 block_identifier: IDENTIFIER;
+#cell_identifier: IDENTIFIER;
+#config_identifier: IDENTIFIER;
+#escaped_identifier is handled by the lexer
+event_identifier: IDENTIFIER;
 function_identifier: IDENTIFIER;
-
+#gate_instance_identifier: IDENTIFIER;
 generate_block_identifier: IDENTIFIER;
 genvar_identifier: IDENTIFIER;
-
 #hierarchical_block_identifier: hierarchical_identifier;
 hierarchical_event_identifier: hierarchical_identifier;
 hierarchical_function_identifier: hierarchical_identifier;
@@ -1756,24 +1815,39 @@ hierarchical_identifier:   hierarchical_identifier_pieces IDENTIFIER { f ("hiera
                          | IDENTIFIER
                          ;
 
+# hierarchical_net_identifier
 hierarchical_parameter_identifier: hierarchical_identifier;
+# hierarchical_variable_identifier
 hierarchical_task_identifier: hierarchical_identifier;
 hierarchical_task_or_block_identifier: hierarchical_identifier;
+# identifier is handled by the lexer
+# inout_port_identifier: IDENTIFIER;
+# input_port_identifier: IDENTIFIER;
+# instance_identifier: IDENTIFIER;
+# library_identifier: IDENTIFIER;
 module_identifier: IDENTIFIER;
 module_instance_identifier: IDENTIFIER;
 net_identifier: IDENTIFIER;
+# output_port_identifier: IDENTIFIER;
 parameter_identifier: IDENTIFIER;
 port_identifier: IDENTIFIER;
+real_identifier: IDENTIFIER;
+# simple_identifier is handled by the lexer
 specparam_identifier: IDENTIFIER;
 system_function_identifier: SYSTEM_IDENTIFIER;
 system_task_identifier: SYSTEM_IDENTIFIER;
 task_identifier: IDENTIFIER;
+# terminal_identifier: IDENTIFIER;
+# text_macro_identifier is handled by the lexer
+# topmodule_identifier: IDENTIFIER;
+# udp_identifier: IDENTIFIER;
+# udp_instance_identifier: IDENTIFIER;
 variable_identifier: IDENTIFIER;
 
 # VP3 syntax extensions
 
-# Parse mode configuration. This is used to short-cut to the
-# module_instantiation rules when parsing the result of @Instance expansion.
+# Parse mode configuration. This is used to short-cut to the appropriate rules
+# when parsing the result of directive expansion.
 
 # Parse::YAPP does not require an EOF token to specify complete parsing, but we
 # need it to track trailing whitespace.
