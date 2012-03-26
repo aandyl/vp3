@@ -218,20 +218,33 @@ Usage:
 The C<@Module> directive introduces a module. If the C<module_identifier> is
 not given, the module name will be taken from the name of the input file.
 
-There are two ways of using C<@Module>, depending on whether Verilog-2001-style
-module headers (full port declarations inline with the header) are desired.
+The C<-v2k> option controls whether the generated module header should use the
+Verilog-2001 syntax, which has full port declarations inline with the header.
 
-If you desire a Verilog-1995-style module header, use the C<@Module> directive
-(without the C<-v2k> option) regardless of whether inferred ports are desired.
-The C<@Ports> directive should be used only if inferred ports are desired.
-@Module will generate port identifiers for declared I/O in both cases and for
-inferred I/O when @Ports is present.
+VP3's port inference functionality, when requested, automatically creates port
+declarations for signals that are undriven or unloaded in the input module
+description. The C<@Module> directive interacts with port inference as follows:
 
-If you desire a Verilog-2001-style module header, whether C<@Module> should be
-used at all depends on whether you want inferred ports. If you do not want
-inferred ports, omit the C<@Module> directive and code the module header
-directly. If you want inferred ports, use C<@Module -v2k>. The generated header
-will include ports explicitly defined in the source and any inferred ports.
+=over 4
+
+=item *
+
+For Verilog-1995-style module headers, use the C<@Module> directive (without
+the C<-v2k> option) regardless of whether inferred ports are desired. If
+inferred ports are desired, specify the C<@Ports> directive within the module.
+Whether or not port inference is enabled, VP3 will scan the module definition
+for C<input> and C<output> declarations, and C<@Module> will include
+identifiers found in those declarations in the generated port list. If
+C<@Ports> is specified in the module, C<@Module> will also include the names of
+any inferred ports in the generated port list.
+
+=item *
+
+For Verilog-2001-style module headers, use C<@Module -v2k> if and only if port
+inference is desired. When using inferred ports, signals may be explicitly
+declared as I/O with the C<@Input> and C<@Output> directives. If port inference
+is not desired, do not use the C<@Module> directive. Code the module header
+directly in Verilog syntax.
 
 =item @Ports
 
@@ -239,12 +252,12 @@ Usage:
 
   @Ports;
 
-The C<@Ports> directive generates port declarations for any signals used in the
-module that are undriven or unloaded. An input or output port will be defined,
-as applicable.
+The C<@Ports> directive generates Verilog-1995 port declarations for any
+signals used in the module that are undriven or unloaded. An input or output
+port will be defined, as applicable.
 
-For Verilog-2001 module headers, inferred ports are generated directly in the
-module header; C<@Ports> should not be used.
+When using Verilog-2001 module headers, inferred ports are generated directly
+in the module header by C<@Module>. C<@Ports> should not be used.
 
 =item @Regs, @Wires
 
@@ -366,7 +379,7 @@ connectivity analysis)
 =item *
 
 complex ports (all the examples other than C<module test> in section 12.3.3 of
-the standard
+the standard)
 
 =item *
 
