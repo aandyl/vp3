@@ -399,7 +399,7 @@ use warnings FATAL => qw(all);
 
 # Note that a version with one dot ("0.x") is treated as 0.x00 whereas a
 # version with two dots ("0.x.y") is treated as 0.00x00y
-our ($VERSION) = "0.1.55";
+our ($VERSION) = "0.1.56";
 
 ######################################################################
 
