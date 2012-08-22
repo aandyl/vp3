@@ -246,6 +246,8 @@ declared as I/O with the C<@Input> and C<@Output> directives. If port inference
 is not desired, do not use the C<@Module> directive. Code the module header
 directly in Verilog syntax.
 
+=back
+
 =item @Ports
 
 Usage:
