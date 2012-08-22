@@ -1216,7 +1216,7 @@ sub VP3::Preprocessor::standard::_eval
     {
         my ($self) = @_;
 
-        if ($self->{msb}) {
+        if (defined ($self->{msb})) {
             return "[$self->{msb}:$self->{lsb}]";
         } else {
             return "";

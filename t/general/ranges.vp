@@ -1,0 +1,5 @@
+@Module -v2k;
+
+assign degenerateVector[0:0] = 1'b1;
+
+endmodule

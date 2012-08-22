@@ -15,6 +15,7 @@ noports.v \
 strengths.v \
 v2k_params.v \
 v2k_ports.v \
+ranges.v \
 
 # Build options
 
@@ -31,6 +32,7 @@ noports.v \
 strengths.v \
 v2k_params.v \
 v2k_ports.v \
+ranges.v \
 
 # Build exceptions
 
