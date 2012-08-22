@@ -1,0 +1,6 @@
+ERROR: error1a.vp:7: port `a' not found in module `sub_internal'
+       module `sub_internal' defined at error1a.vp:13
+ERROR: error1a.vp:9: port `a' not found in module `sub'
+       module `sub' defined at sub.v:4
+Exiting after connectivity analysis due to errors
+Preprocessor output has been saved in error1a.v.preprocessed
