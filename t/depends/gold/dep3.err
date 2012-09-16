@@ -1,0 +1,4 @@
+ERROR: couldn't find include file header.vh
+ERROR: Couldn't find definition for notfound
+ERROR: Can't auto-instance `notfound' without its definition
+Preprocessor output has been saved in dep3.vp.preprocessed

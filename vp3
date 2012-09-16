@@ -610,20 +610,21 @@ sub VP3::Preprocessor::standard::_eval
     # static method
     sub analyze
     {
-        my ($module) = @_;
+        my ($vp3, $module) = @_;
 
         $module->typeis ("module_declaration")
             or confess "usage: VP3::ConnectivityAnalyzer->analyze (<module_declaration obj>)";
 
-        my $obj = __PACKAGE__->new ($module);
+        my $obj = __PACKAGE__->new ($vp3, $module);
         $obj->visit ($module);
         $obj->result;
     }
 
     sub new
     {
-        my ($class, $module) = @_;
+        my ($class, $vp3, $module) = @_;
         my $self = $class->SUPER::new;
+        $self->{vp3}           = $vp3;
         $self->{module}        = $module;
         $self->{direction}     = "sink";
         $self->{source_type}   = undef;
@@ -866,7 +867,7 @@ sub VP3::Preprocessor::standard::_eval
 
         my $inst_module = $target->module_identifier->emit_self;
 
-        my $ports = VP3::ports ($inst_module);
+        my $ports = $self->{vp3}->ports ($inst_module);
 
         # !!! should we fail if we don't get the ports?
 
@@ -2879,9 +2880,9 @@ sub VP3::Preprocessor::standard::_eval
 
         my $ports;
         if ($target->file) {
-            $ports = VP3::ports ($target->module, $target->file);
+            $ports = $self->{vp3}->ports ($target->module, $target->file);
         } else {
-            $ports = VP3::ports ($target->module);
+            $ports = $self->{vp3}->ports ($target->module);
         }
 
         # This error can fire either because the module was not found or
@@ -3851,6 +3852,11 @@ sub VP3::Preprocessor::standard::_eval
         1;
     }
 
+    sub depend_cb
+    {
+        $_[0]->{depend_cb} = $_[1];
+    }
+
     sub lex
     {
 
@@ -4255,10 +4261,18 @@ sub VP3::Preprocessor::standard::_eval
         }
     }
 
+    sub depend
+    {
+        my $self = shift;
+        $self->{depend_cb} && $self->{depend_cb}->(@_);
+    }
+
     sub include
     {
         my ($self, $ifile) = @_;
         my ($fh);
+
+        $self->depend ("vinc", $ifile);
 
         my $file = VP3::find_include ($ifile);
         unless ($file) {
@@ -4397,6 +4411,8 @@ sub VP3::Preprocessor::standard::_eval
             perl_start      => undef,
             pkg_name        => $pkg_name,
             pkg_stash       => do { no strict 'refs'; \%{$pkg_name . '::'} },
+            depends         => [ ],
+            depends_mode    => 0,
         };
         bless $self, $class;
 
@@ -4413,6 +4429,18 @@ sub VP3::Preprocessor::standard::_eval
         Symbol::delete_package ($_[0]->{pkg_name});
     }
 
+    sub depends_mode {
+        $_[0]->{depends_mode} = $_[1];
+    }
+
+    sub depends {
+        @{$_[0]->{depends}};
+    }
+
+    sub depend {
+        push @{$_[0]->{depends}}, [ @_[1..$#_] ];
+    }
+
     sub includes { push @{$_[0]->{include_paths}}, @_[1..$#_]; }
 
     sub include
@@ -4420,6 +4448,8 @@ sub VP3::Preprocessor::standard::_eval
         my ($self, $ifile) = @_;
         my $fh;
         my @search;
+
+        $self->depend ("inc", $ifile);
 
         push @search, grep { -f $_ } map (File::Spec->catfile ($_, $ifile), @{$self->{include_paths}});
         push @search, $ifile if -f $ifile;
@@ -4830,6 +4860,8 @@ sub VP3::Preprocessor::standard::_eval
 {
     package VP3::Preprocessor::ep3;
 
+    use File::Temp qw();
+
     for (qw(Module Ports Regs Wires Vector Input Output Waive Unparsed Instance)) {
         eval "sub Text::EP3::$_ { print \$_[1] }";
     }
@@ -4845,11 +4877,41 @@ sub VP3::Preprocessor::standard::_eval
         bless $self, $class;
     }
 
+    sub depends_mode
+    {
+        $_[0]->{depends_mode} = $_[1];
+    }
+
+    sub depends
+    {
+        return map [ "inc", $_ ], @{$_[0]->{depends}};
+    }
+
     sub includes { $_[0]->{ep3}->ep3_includes (@_[1..$#_]); }
 
     sub process
     {
         my ($self, $args) = @_;
+
+        if ($self->{depends_mode}) {
+            my $depends_output = File::Temp->new;
+
+            $self->{ep3}->ep3_gen_depend_list (1);
+            $self->{ep3}->ep3_output_file ($depends_output->filename);
+            $self->{ep3}->ep3_process ($args->{input});
+
+            # Need to force ep3 to flush and close the file so we get all the
+            # dependencies
+            $self->{ep3}->ep3_output_file ("STDOUT");
+
+            open (my $fh, "<", $depends_output)
+                or VP3::error_fatal ("Failed to open ep3 depends output: $!");
+
+            chomp (@{$self->{depends}} = <$fh>);
+
+            $self->{ep3}->ep3_reset;
+            $self->{ep3}->ep3_gen_depend_list (undef);
+        }
 
         $self->{ep3}->ep3_output_file ($args->{output});
         $self->{ep3}->ep3_process ($args->{input});
@@ -4880,7 +4942,6 @@ our ($include_dirs)  = [ ];
 our ($library_dirs)  = [ ];
 our ($library_files) = [ ];
 our ($defines)       = [ ];
-my  (%ports_cache);
 
 # This string is written at the start of generated files. In certain cases, we
 # check for this string before overwriting a file, so be careful adding
@@ -4891,6 +4952,14 @@ our ($signature) = "// Generated by vp3";
 
 our ($warning_count) = 0;
 our ($error_count)   = 0;
+
+sub status {
+    my $self = shift;
+
+    if ($self->{output} ne '-') {
+        print @_, "\n";
+    }
+}
 
 sub warning {
     $warning_count++;
@@ -4935,15 +5004,24 @@ sub fatal {
 
 ##
 
+sub depend
+{
+    push @{$_[0]->{depends}}, [ @_[1..$#_] ];
+}
+
+##
+
 sub new
 {
     my $class = shift;
     my $self = {
-        preprocessor => "standard",
+        preprocessor    => "standard",
+        output          => "-",
     };
 
     GetOptions (
         "o=s"           => \$self->{output},
+        "depends"       => \$self->{depends_mode},
         "p=s"           => \$self->{preprocessor},
         "debug"         => \$debug,
         "d=s\@"         => $defines,
@@ -4961,10 +5039,10 @@ sub new
     $self->{basename} = $self->{input};
     $self->{basename} =~ s/\..*//;
     $self->{pass1out} = File::Temp->new;
-    $self->{output} or VP3::error_fatal ("-o <output> option is required");
 
-    $self->{output} ne $self->{input}
-        or VP3::error_fatal ("will not overwrite input file with output");
+    if ($self->{output} ne "-" && $self->{output} eq $self->{input}) {
+        VP3::error_fatal ("will not overwrite input file with output");
+    }
 
     bless $self, $class;
 }
@@ -4973,10 +5051,11 @@ sub debug { $debug }
 
 sub parse
 {
-    my ($file, $basename, $error_ref) = @_;
+    my ($file, $basename, $depend_cb, $error_ref) = @_;
 
     my $p = VP3::Parser->new;
     $p->YYData->{lexer} = VP3::Lexer->new;
+    $p->YYData->{lexer}->depend_cb ($depend_cb);
     $p->YYData->{lexer}->open ($file) or VP3::error ("Couldn't open `$file': $!");
 
     for (@$defines) {
@@ -5001,7 +5080,7 @@ sub save_pass1out
 
     my ($self) = @_;
 
-    my $save_file = $self->{output} . ".preprocessed";
+    my $save_file = $self->{input} . ".preprocessed";
     my $fh;
 
     if (-f $save_file) {
@@ -5045,12 +5124,19 @@ sub analyze
     my $conn_db;
     my $vdb;
 
-    $vdb = $self->{vp3}{vdb} = parse ($self->{pass1out}->filename, $self->{basename}, \$error);
+    my $depend_cb = sub {
+        $self->depend (@_);
+    };
+
+    $vdb = $self->{vp3}{vdb} = parse ($self->{pass1out}->filename,
+                                      $self->{basename},
+                                      $depend_cb,
+                                      \$error);
 
     unless ($vdb) {
         VP3::error ("While reading first pass output:", $error);
         print STDERR $self->save_pass1out, "\n";
-        exit 1;
+        return undef;
     }
 
     #print STDERR "*** BEGIN analyze $self->{pass1out} parse tree ***\n";
@@ -5106,14 +5192,8 @@ sub analyze
             $xlate = VP3::Expander->new ($self);
             $$modref = $xlate->visit ($$modref);
 
-            print "Analyzing " . $modname . "\n";
-            $conn_db = VP3::ConnectivityAnalyzer::analyze ($$modref);
-            if ($error_count) {
-                print STDERR "Exiting after connectivity analysis due to errors\n";
-                print STDERR $self->save_pass1out, "\n";
-                exit 1;
-            }
-
+            $self->status ("Analyzing ", $modname);
+            $conn_db = VP3::ConnectivityAnalyzer::analyze ($self, $$modref);
             $self->{vp3}{connectivity}{$modname} = $conn_db;
 
             #print STDERR "*** BEGIN analyze connectivity DB dump ***\n";
@@ -5124,13 +5204,13 @@ sub analyze
             $xlate = VP3::Translator->new ($self);
             $$modref = $xlate->visit ($$modref);
 
-            print "Validating connectivity in " . $modname . "\n";
+            $self->status ("Validating connectivity in ", $modname);
             $self->{vp3}{connectivity}{$modname}->validate;
 
             #print Dumper ($modref);
 
             # Save module information in the ports cache (in case there are multiple modules in the file)
-            $ports_cache{$modname} = $$modref;
+            $self->{ports_cache}->{$modname} = $$modref;
 
             # The current module is now considered a leaf, i.e. now that it is
             # processed we can work on any modules that instantiate it.
@@ -5142,9 +5222,19 @@ sub analyze
         }
     }
 
+    if ($self->{warnings_as_errors} && $warning_count) {
+        VP3::error ("warnings being treated as errors");
+    }
+
+    if ($error_count) {
+        print STDERR $self->save_pass1out, "\n";
+        return undef;
+    }
+
+    1;
 }
 
-sub generate
+sub output_verilog
 {
 
     my $self = $_[0];
@@ -5163,30 +5253,53 @@ sub generate
     my $v = VP3::ParseTreeVisitor->new ($emit);
     $v->visit ($self->{vp3}{vdb});
 
-    if ($self->{warnings_as_errors} && $warning_count) {
-        VP3::error ("warnings being treated as errors");
-        exit 1;
+    my $fh;
+
+    if ($self->{output} ne "-") {
+        $fh = IO::File->new ($self->{output}, "w")
+            or VP3::error_fatal ("can't open `$self->{output}' for writing: $!");
     } else {
-        my $fh = IO::File->new ($self->{output}, "w");
-        print $fh "$signature\n\n";
-        print $fh $output;
+        $fh = *STDOUT{IO};
     }
+
+    print $fh "$signature\n\n";
+    print $fh $output;
 
 }
 
-# static method (VP3::ports)
+sub output_depends
+{
+
+    my $self = $_[0];
+
+    my $fh;
+
+    if ($self->{output} ne "-") {
+        $fh = IO::File->new ($self->{output}, "w")
+            or VP3::error_fatal ("can't open `$self->{output}' for writing: $!");
+    } else {
+        $fh = *STDOUT{IO};
+    }
+
+    print $fh "$_->[0] $_->[1]\n" for @{$self->{depends}};
+
+}
+
 sub ports
 {
 
-    my ($module, @search_files) = @_;
+    my ($self, $module, @search_files) = @_;
 
-    if ($ports_cache{$module}) {
+    if ($self->{ports_cache}->{$module}) {
         $debug && print STDERR "Using cached port information for $module\n";
-        return $ports_cache{$module}->ports;
+        return $self->{ports_cache}->{$module}->ports;
     }
 
-    unless (@search_files) {
-        @search_files = find ($module);
+    if (@search_files) {
+        @search_files = map [ "vlib", $_ ], @search_files;
+    } else {
+        @search_files = map [ "vmod", File::Spec->catfile ($_, "${module}.v") ], @$library_dirs;
+        push @search_files, map [ "vlib", $_ ], @$library_files;
     }
 
     # !!! should give a better error message
@@ -5195,11 +5308,20 @@ sub ports
         return undef;
     }
 
-    for my $file (@search_files) {
+    for (@search_files) {
+        my ($dep_type, $file) = @$_;
+
+        next unless -f $file;
+
         $debug && print STDERR "Looking for ports of $module in $file\n";
 
+        my @depends;
+        my $depend_cb = sub {
+            push @depends, [ @_ ];
+        };
+
         my $error;
-        my $vroot = parse ($file, undef, \$error);
+        my $vroot = parse ($file, undef, $depend_cb, \$error);
 
         if (!$vroot) {
             VP3::warning ("While searching for $module, couldn't parse $file:\n$error");
@@ -5208,11 +5330,13 @@ sub ports
 
         # !!! Cache other information, e.g. source file used?
         for ($vroot->modules) {
-            if (!$ports_cache{$_->module_identifier}) {
-                $debug && print STDERR "Adding $_->module_identifier to cache\n";
-                $ports_cache{$_->module_identifier} = $_;
+            my $name = $_->module_identifier;
+
+            if (!$self->{ports_cache}->{$name}) {
+                $debug && print STDERR "Adding $name to cache\n";
+                $self->{ports_cache}->{$name} = $_;
             } else {
-                $debug && print STDERR "Ports for $_->module_identifier already cached\n";
+                $debug && print STDERR "Ports for $name already cached\n";
             }
         }
 
@@ -5221,6 +5345,13 @@ sub ports
             next;
         }
 
+        # Add a dependency for the module itself.
+        $self->depend ($dep_type, $dep_type eq "vlib" ? $file : $module);
+
+        # Add any depenedencies arising from the module definition we just
+        # parsed, e.g. included headers.
+        $self->depend (@$_) for @depends;
+
         if ($debug) {
             #print STDERR "*** BEGIN $file parse tree ***\n";
             #print STDERR Dumper ($vroot);
@@ -5228,33 +5359,19 @@ sub ports
         }
 
         # If we got here, we found the module defn, so we're done
-        return $ports_cache{$module}->ports;
+        return $self->{ports_cache}->{$module}->ports;
     }
 
     VP3::error ("Couldn't find definition for $module");
-    return undef;
 
-}
-
-sub find
-{
-    my ($module) = @_;
-
-    my @search;
-
-    # First try to find the module in a library directory. This is the fastest
-    # way to find modules.
-
-    for (map { File::Spec->catfile ($_, "${module}.v") } @$library_dirs) {
-        push (@search, $_) if -f $_;
+    # If there are any library directories where we could read the module from
+    # if it existed, produce a dependency record.
+    if (grep { $_->[0] eq "vmod" } @search_files) {
+        $self->depend ("vmod", $module);
     }
 
-    # Add any library files to the end of the list. Searching these is slow as
-    # they must all be parsed completely until the desired module is found.
+    return undef;
 
-    push @search, @$library_files;
-
-    @search;
 }
 
 sub find_include
@@ -5283,16 +5400,28 @@ sub process
 
     my $pp = $pp_class->new or die "Failed to create preprocessor object";
 
+    $pp->depends_mode ($self->{depends_mode});
     $pp->includes (@$include_dirs);
     $pp->process ({
         input => $self->{input},
         output => $self->{pass1out}->filename,
     });
 
+    if ($self->{depends_mode}) {
+        $self->depend (@$_) for $pp->depends;
+    }
+
     # Second pass - verilog analysis and generation
 
-    $self->analyze;
-    $self->generate;
+    my $analyze_result = $self->analyze;
+
+    if ($self->{depends_mode}) {
+        $self->output_depends;
+    } elsif ($analyze_result) {
+        $self->output_verilog;
+    }
+
+    return $analyze_result
 
 }
 
@@ -5306,6 +5435,8 @@ sub process
 
 my $v = VP3->new (@ARGV);
 
-$v->process;
+my $r = $v->process;
+
+exit ($r ? 0 : 1);
 
 # vim: sts=4 sw=4 et
