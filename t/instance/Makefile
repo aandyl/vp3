@@ -21,9 +21,9 @@ connect.v \
 
 # Dependencies
 
-basic.v : submod.v
+basic.run_vp3 : submod.run_vp3
 
-connect.v : submod.v
+connect.run_vp3 : submod.run_vp3
 
 # Rules
 

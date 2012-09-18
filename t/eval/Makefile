@@ -7,8 +7,6 @@ paramports.v \
 
 # Build options
 
-#VP3_OPTS := -y .
-
 TOP := \
 paramports.v \
 

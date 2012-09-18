@@ -4936,6 +4936,31 @@ use Carp qw(carp cluck croak confess);
 use File::Temp qw();
 use File::Copy qw();
 use File::Spec;
+use Class::Struct;
+
+BEGIN {
+    struct (
+        'VP3::ModuleCacheEntry' => [
+            # Parse tree for the module
+            module => '$',
+
+            # True if the module was found incidentally, e.g. while looking
+            # for a different module. Opportunistically cached modules have
+            # not had their dependencies recorded and might not be found if
+            # they were independently sought using only library specifications
+            # # (-v and -y) from the command line.
+            is_opp => '$', 
+                                  
+            # Source file from which we parsed the module. Unset if the module
+            # is from the current file.
+            source_file => '$',
+
+            # List of dependencies. Unset if the module is from the current
+            # file.
+            depends => '@',
+        ]
+    );
+}
 
 our ($debug);
 our ($include_dirs)  = [ ];
@@ -5016,6 +5041,7 @@ sub new
     my $class = shift;
     my $self = {
         preprocessor    => "standard",
+        module_cache    => { },
         output          => "-",
     };
 
@@ -5209,8 +5235,11 @@ sub analyze
 
             #print Dumper ($modref);
 
-            # Save module information in the ports cache (in case there are multiple modules in the file)
-            $self->{ports_cache}->{$modname} = $$modref;
+            # Save module information in the cache (in case there are multiple modules in the file)
+            $self->{module_cache}->{$modname} = VP3::ModuleCacheEntry->new (
+                module  => $$modref,
+                is_opp  => 0,
+            );
 
             # The current module is now considered a leaf, i.e. now that it is
             # processed we can work on any modules that instantiate it.
@@ -5281,18 +5310,84 @@ sub output_depends
         $fh = *STDOUT{IO};
     }
 
-    print $fh "$_->[0] $_->[1]\n" for @{$self->{depends}};
+    my %printed;
+
+    for (@{$self->{depends}}) {
+        my $tag = $_->[0] . ":" . $_->[1];
+        next if $printed{$tag}++;
+        print $fh "$_->[0] $_->[1]\n";
+    }
 
 }
+
+# Helpers for ports(). Not geared for general use.
+
+use Cwd qw();
+
+sub find_module_in_cache
+{
+    my ($self, $module, $file) = @_;
+
+    return undef unless (my $cache_entry = $self->{module_cache}->{$module});
+
+    my $cache_source_file = Cwd::abs_path ($cache_entry->source_file);
+    my $current_source_file = Cwd::abs_path ($file);
+
+    return undef if ($cache_source_file ne $current_source_file);
+
+    $debug && print STDERR "using cached description of $module (after search)\n";
+
+    return $cache_entry;
+}
+
+sub add_module_to_cache
+{
+    my ($self, $module, $is_opp, $file, $depends) = @_;
+
+    my $name = $module->module_identifier;
+    my $cache = $self->{module_cache};
+
+    if (!$cache->{$name}) {
+        $debug && print STDERR "Adding $name to module cache\n";
+
+        $cache->{$name} = VP3::ModuleCacheEntry->new (
+            module      => $module,
+            is_opp      => $is_opp,
+            source_file => $file,
+            depends     => $depends,
+        );
+
+        return 1;
+    } else {
+        my $cache_source_file = Cwd::abs_path ($cache->{$name}->source_file);
+        my $current_source_file = Cwd::abs_path ($file);
+
+        if ($cache_source_file ne $current_source_file) {
+            VP3::warning ("module `$name' has been read from both " .
+                          "`$cache_source_file' and `$current_source_file'");
+        } elsif ($debug) {
+            print STDERR "module `$name' should have been retrieved from cache. possible bug.\n";
+        }
+
+        return undef;
+    }
+}
+
+# This function is often called twice for instantiated modules, once when
+# expanding the @Instance directive, and again when doing connectivity
+# analysis. For @Instance, the file to read may be specified manually with
+# -file, but that information doesn't propagate to the connectivity analyzer. 
 
 sub ports
 {
 
     my ($self, $module, @search_files) = @_;
 
-    if ($self->{ports_cache}->{$module}) {
-        $debug && print STDERR "Using cached port information for $module\n";
-        return $self->{ports_cache}->{$module}->ports;
+    my $cache = $self->{module_cache};
+
+    if ($cache->{$module} && !$cache->{$module}->is_opp) {
+        $debug && print STDERR "using cached description of module $module (search bypassed)\n";
+        return $cache->{$module}->module->ports;
     }
 
     if (@search_files) {
@@ -5313,6 +5408,14 @@ sub ports
 
         next unless -f $file;
 
+        if (my $cached_module = $self->find_module_in_cache ($module, $file)) {
+            if ($cached_module->is_opp) {
+                $self->depend ($dep_type, $dep_type eq "vlib" ? $file : $module);
+                $self->depend (@$_) for @{$cached_module->depends};
+            }
+            return $cached_module->module->ports;
+        }
+
         $debug && print STDERR "Looking for ports of $module in $file\n";
 
         my @depends;
@@ -5328,38 +5431,38 @@ sub ports
             next;
         }
 
-        # !!! Cache other information, e.g. source file used?
-        for ($vroot->modules) {
-            my $name = $_->module_identifier;
+        my $result;
 
-            if (!$self->{ports_cache}->{$name}) {
-                $debug && print STDERR "Adding $name to cache\n";
-                $self->{ports_cache}->{$name} = $_;
+        for ($vroot->modules) {
+            my $opp;
+
+            if ($_->module_identifier eq $module) {
+                $opp = 0;
+                $result = $_;
             } else {
-                $debug && print STDERR "Ports for $name already cached\n";
+                $opp = 1;
             }
+
+            $self->add_module_to_cache ($_, $opp, $file, \@depends);
         }
 
-        if (!$vroot->module ($module)) {
+        if (!$result) {
             $debug && print STDERR "Module $module not found in $file\n";
             next;
         }
 
-        # Add a dependency for the module itself.
+        # Record dependencies, since we're actually going to use the module.
         $self->depend ($dep_type, $dep_type eq "vlib" ? $file : $module);
-
-        # Add any depenedencies arising from the module definition we just
-        # parsed, e.g. included headers.
         $self->depend (@$_) for @depends;
 
-        if ($debug) {
-            #print STDERR "*** BEGIN $file parse tree ***\n";
-            #print STDERR Dumper ($vroot);
-            #print STDERR "*** END $file parse tree ***\n";
-        }
+        #if ($debug) {
+        #    print STDERR "*** BEGIN $file parse tree ***\n";
+        #    print STDERR Dumper ($vroot);
+        #    print STDERR "*** END $file parse tree ***\n";
+        #}
 
         # If we got here, we found the module defn, so we're done
-        return $self->{ports_cache}->{$module}->ports;
+        return $result->ports;
     }
 
     VP3::error ("Couldn't find definition for $module");

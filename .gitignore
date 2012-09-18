@@ -5,3 +5,7 @@
 /t/*/*.v
 /t/*/*.err
 /t/*/*.out
+/t/*/*.deps
+/t/*/*.run_vp3
+/t/*/*.diff
+/t/*/*.build

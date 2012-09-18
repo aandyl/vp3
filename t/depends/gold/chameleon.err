@@ -1,0 +1,3 @@
+ERROR: Couldn't find definition for chameleon_other_mod
+ERROR: Can't auto-instance `chameleon_other_mod' without its definition
+Preprocessor output has been saved in chameleon.vp.preprocessed

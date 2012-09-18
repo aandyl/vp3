@@ -12,13 +12,21 @@ FILES := \
 dep1.v \
 dep2.v \
 dep3.v \
+chameleon.v \
+chameleon2.v \
+chameleon_mods.v \
 
 # Build options
 
 VP3_OPTS := -y .
 
-VP3_SHOULD_FAIL := 1
-VP3_DIFF_OUTPUT :=
+VP3_SHOULD_FAIL.dep1 := 1
+VP3_SHOULD_FAIL.dep2 := 1
+VP3_SHOULD_FAIL.dep3 := 1
+
+VP3_SHOULD_FAIL.chameleon := 1
+
+VP3_OPTS.chameleon2 := -v chameleon_mods.v
 
 # What to compile
 
@@ -26,7 +34,14 @@ TOP :=
 
 # Build exceptions
 
+chameleon2.vp : chameleon.vp
+	cp $< $@
+
 # Dependencies
+
+chameleon.run_vp3 : chameleon_mods.run_vp3
+
+chameleon2.run_vp3 : chameleon_mods.run_vp3
 
 # Rules
 

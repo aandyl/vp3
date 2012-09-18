@@ -19,22 +19,23 @@ TOP :=
 
 # Build exceptions
 
-werror.v: VP3_OPTS += -w
+VP3_OPTS.werror := -w
 
-sub.v: VP3_SHOULD_FAIL :=
+VP3_SHOULD_FAIL.error1a := 1
+VP3_SHOULD_FAIL.error1b := 1
+VP3_SHOULD_FAIL.error1c := 1
+VP3_SHOULD_FAIL.werror := 1
+VP3_SHOULD_FAIL.include := 1
 
 # Dependencies
 
-error1.v: sub.v
+error1.run_vp3: sub.run_vp3
 
-error1a.v: sub.v
+error1a.run_vp3: sub.run_vp3
 
-error1b.v: sub.v
+error1b.run_vp3: sub.run_vp3
 
-error1c.v: sub.v
-
-VP3_SHOULD_FAIL := 1
-VP3_DIFF_OUTPUT :=
+error1c.run_vp3: sub.run_vp3
 
 # Special tests for pass1out handling
 
