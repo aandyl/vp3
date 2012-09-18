@@ -432,6 +432,8 @@ sub VP3::Preprocessor::standard::_eval
 
     # Abstract base class for parse tree visitors
 
+    no warnings 'recursion';
+
     sub new
     {
         my ($class, $default) = @_;
@@ -499,6 +501,8 @@ sub VP3::Preprocessor::standard::_eval
 
     package VP3::ParseTreeMutator;
     use base 'VP3::ParseTreeVisitor';
+
+    no warnings 'recursion';
 
     sub visit
     {
@@ -5270,6 +5274,8 @@ sub output_verilog
     my $output = "";
 
     my $emit = sub {
+        no warnings 'recursion';
+
         my ($self, $target) = @_;
 
         if (!@{$target->children}) {
