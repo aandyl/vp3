@@ -1,0 +1,14 @@
+// This test checks our behavior when a -y library file that we know how to
+// find (chameleon_mods) defines another module that we can't find based on
+// the -y mechanism.
+//
+// Makefile runs two variants, one with the -v needed to find
+// chameleon_other_mod, and one without.
+
+@Module -v2k;
+
+@Instance chameleon_mods ua -connect /^/ a;
+
+@Instance chameleon_other_mod ub -connect /^/ b;
+
+endmodule
