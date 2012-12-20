@@ -1,5 +1,3 @@
-@include "common.vh"
-
 @define MACRO1 m1val
 
 // Should not be expanded: MACRO1
@@ -15,11 +13,11 @@
    @perl_end
  */
 
-@Module;
+@Module ;
 
-@Ports;
+@Ports ;
 
-  @mux a b s q
+  assign q = s ? b : a;
 
   assign MACRO1 = MACRO2;
 

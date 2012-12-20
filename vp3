@@ -1,4 +1,4 @@
-#!/opt/perl-5.8.8/bin/perl -w
+#!/opt/perl-5.8.8/bin/perl
 
 # Copyright 2010, 2011 Andrew Leiserson <andy@leiserson.org>
 # See the file README in the VP3 distribution for more information.
@@ -101,15 +101,20 @@ C<standard> (the default), and C<ep3>.
 
 Optional. Enables additional debug output.
 
-=item -d NAME, -d NAME=VALUE
+=item --vdefine NAME, --vdefine NAME=VALUE
 
 Optional. Defines the Verilog preprocessor macro `NAME, either with an empty
 expansion, or as VALUE. 
 
+=item -d NAME[=VALUE], --define NAME[=VALUE]
+
+Optional. Defines the VP3 preprocessor macro NAME, either with an empty
+expansion, or as VALUE.
+
 =item -i path, --include path
 
-Optional. Specifies include paths in which to search for Verilog C<`include>
-files.
+Optional. Specifies include paths in which to search for VP3 preprocessor
+C<@include> files.
 
 =item -v file
 
@@ -4472,6 +4477,13 @@ sub VP3::Preprocessor::standard::_eval
         VP3::error ("couldn't find include file $ifile");
     }
 
+    sub define
+    {
+        my ($self, $name, $value) = @_;
+
+        $self->{defines}->{$name} = { value => $value };
+    }
+
     # sub _eval is defined at the start of the file, to provide a clean lexical
     # environment
 
@@ -4867,6 +4879,8 @@ sub VP3::Preprocessor::standard::_eval
     use File::Temp qw();
 
     for (qw(Module Ports Regs Wires Vector Input Output Waive Unparsed Instance)) {
+        # In depends mode, EP3 closes the default filehandle.
+        no warnings 'unopened';
         eval "sub Text::EP3::$_ { print \$_[1] }";
     }
 
@@ -4877,6 +4891,7 @@ sub VP3::Preprocessor::standard::_eval
         my ($class) = shift;
         my $self = {
             ep3 => Text::EP3->new,
+            defines => [ ],
         };
         bless $self, $class;
     }
@@ -4893,6 +4908,13 @@ sub VP3::Preprocessor::standard::_eval
 
     sub includes { $_[0]->{ep3}->ep3_includes (@_[1..$#_]); }
 
+    sub define
+    {
+        my ($self, $key, $value) = @_;
+
+        push @{$self->{defines}}, defined ($value) ? join ("=", $key, $value) : $key;
+    }
+
     sub process
     {
         my ($self, $args) = @_;
@@ -4902,6 +4924,8 @@ sub VP3::Preprocessor::standard::_eval
 
             $self->{ep3}->ep3_gen_depend_list (1);
             $self->{ep3}->ep3_output_file ($depends_output->filename);
+            @{$self->{ep3}->{Defines}} = @{$self->{defines}};
+            $self->{ep3}->ep3_defines;
             $self->{ep3}->ep3_process ($args->{input});
 
             # Need to force ep3 to flush and close the file so we get all the
@@ -4918,6 +4942,8 @@ sub VP3::Preprocessor::standard::_eval
         }
 
         $self->{ep3}->ep3_output_file ($args->{output});
+        @{$self->{ep3}->{Defines}} = @{$self->{defines}};
+        $self->{ep3}->ep3_defines;
         $self->{ep3}->ep3_process ($args->{input});
 
         # Close the output
@@ -4970,7 +4996,6 @@ our ($debug);
 our ($include_dirs)  = [ ];
 our ($library_dirs)  = [ ];
 our ($library_files) = [ ];
-our ($defines)       = [ ];
 
 # This string is written at the start of generated files. In certain cases, we
 # check for this string before overwriting a file, so be careful adding
@@ -5047,6 +5072,8 @@ sub new
         preprocessor    => "standard",
         module_cache    => { },
         output          => "-",
+        v_defines       => [ ],
+        pp_defines      => [ ],
     };
 
     GetOptions (
@@ -5054,7 +5081,8 @@ sub new
         "depends"       => \$self->{depends_mode},
         "p=s"           => \$self->{preprocessor},
         "debug"         => \$debug,
-        "d=s\@"         => $defines,
+        "vdefine=s\@"   => $self->{v_defines},
+        "define=s\@"    => $self->{pp_defines},
         "include=s\@"   => $include_dirs,
         "v=s\@"         => $library_files,
         "y=s\@"         => $library_dirs,
@@ -5081,14 +5109,14 @@ sub debug { $debug }
 
 sub parse
 {
-    my ($file, $basename, $depend_cb, $error_ref) = @_;
+    my ($self, $file, $basename, $depend_cb, $error_ref) = @_;
 
     my $p = VP3::Parser->new;
     $p->YYData->{lexer} = VP3::Lexer->new;
     $p->YYData->{lexer}->depend_cb ($depend_cb);
     $p->YYData->{lexer}->open ($file) or VP3::error ("Couldn't open `$file': $!");
 
-    for (@$defines) {
+    for (@{$self->{v_defines}}) {
         my ($name, $value) = split ('=', $_);
         defined ($value) or $value = "";
 
@@ -5158,10 +5186,10 @@ sub analyze
         $self->depend (@_);
     };
 
-    $vdb = $self->{vp3}{vdb} = parse ($self->{pass1out}->filename,
-                                      $self->{basename},
-                                      $depend_cb,
-                                      \$error);
+    $vdb = $self->{vp3}{vdb} = $self->parse ($self->{pass1out}->filename,
+                                             $self->{basename},
+                                             $depend_cb,
+                                             \$error);
 
     unless ($vdb) {
         VP3::error ("While reading first pass output:", $error);
@@ -5430,7 +5458,7 @@ sub ports
         };
 
         my $error;
-        my $vroot = parse ($file, undef, $depend_cb, \$error);
+        my $vroot = $self->parse ($file, undef, $depend_cb, \$error);
 
         if (!$vroot) {
             VP3::warning ("While searching for $module, couldn't parse $file:\n$error");
@@ -5511,6 +5539,13 @@ sub process
 
     $pp->depends_mode ($self->{depends_mode});
     $pp->includes (@$include_dirs);
+
+    for (@{$self->{pp_defines}}) {
+        my ($name, $value) = split ('=', $_);
+        # $value is undefined if there was no =, that's what we want
+        $pp->define ($name, $value);
+    }
+
     $pp->process ({
         input => $self->{input},
         output => $self->{pass1out}->filename,

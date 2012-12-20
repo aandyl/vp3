@@ -3,7 +3,6 @@
 
 
 
-
 // Should not be expanded: MACRO1
 
 /* Should not be expanded:
@@ -21,6 +20,8 @@
 module preprocessor (
       a
     , b
+    , m1val
+    , m2val
     , q
     , s
 );
@@ -28,9 +29,13 @@ module preprocessor (
 //|@Ports;
 input  a;
 input  b;
+output  m1val;
+input  m2val;
 output  q;
 input  s;
 
 assign q = s ? b : a;
+
+  assign m1val = m2val;
 
 endmodule
