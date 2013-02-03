@@ -4869,6 +4869,7 @@ sub VP3::Preprocessor::standard::_eval
         $self->{fh}->close;
         $self->{output}->close;
 
+        return 1;
     }
 
 } # package VP3::Preprocessor::standard
@@ -4926,7 +4927,12 @@ sub VP3::Preprocessor::standard::_eval
             $self->{ep3}->ep3_output_file ($depends_output->filename);
             @{$self->{ep3}->{Defines}} = @{$self->{defines}};
             $self->{ep3}->ep3_defines;
-            $self->{ep3}->ep3_process ($args->{input});
+            my $result = eval { $self->{ep3}->ep3_process ($args->{input}); };
+
+            if (!defined ($result)) {
+                chomp $@;
+                VP3::error ("EP3 error: $@");
+            }
 
             # Need to force ep3 to flush and close the file so we get all the
             # dependencies
@@ -4937,6 +4943,10 @@ sub VP3::Preprocessor::standard::_eval
 
             chomp (@{$self->{depends}} = <$fh>);
 
+            if (!defined ($result)) {
+                return undef;
+            }
+
             $self->{ep3}->ep3_reset;
             $self->{ep3}->ep3_gen_depend_list (undef);
         }
@@ -4944,10 +4954,18 @@ sub VP3::Preprocessor::standard::_eval
         $self->{ep3}->ep3_output_file ($args->{output});
         @{$self->{ep3}->{Defines}} = @{$self->{defines}};
         $self->{ep3}->ep3_defines;
-        $self->{ep3}->ep3_process ($args->{input});
+        my $result = eval { $self->{ep3}->ep3_process ($args->{input}); };
+
+        if (!defined ($result)) {
+            chomp $@;
+            VP3::error ("EP3 error: $@");
+            return undef;
+        }
 
         # Close the output
         $self->{ep3}->ep3_output_file ("STDOUT");
+
+        return 1;
     }
 
 } # package VP3::Preprocessor::ep3
@@ -5546,13 +5564,20 @@ sub process
         $pp->define ($name, $value);
     }
 
-    $pp->process ({
+    my $pp_result = $pp->process ({
         input => $self->{input},
         output => $self->{pass1out}->filename,
     });
 
     if ($self->{depends_mode}) {
         $self->depend (@$_) for $pp->depends;
+    }
+
+    if (!$pp_result) {
+        if ($self->{depends_mode}) {
+            $self->output_depends;
+        }
+        return undef;
     }
 
     # Second pass - verilog analysis and generation

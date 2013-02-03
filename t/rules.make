@@ -20,30 +20,34 @@ else \
 fi
 endef
 
+# Suppress diffs that look like error messages from EP3 and that contain a line
+# number reference, so we're not overly sensitive to changes in the EP3 script.
+DIFF_ARGS := -I 'EP3 error: .*line [0-9]\+'
+
 .PRECIOUS: %.diff
 %.diff: %.run_vp3
 	$(if $(VP3_SHOULD_FAIL.$*),,$(_DIFF_OUTPUT))
 	@if [ -f gold/$*.deps ]; then \
 		echo diff gold/$*.deps $*.deps ;\
-		diff gold/$*.deps $*.deps ;\
+		diff $(DIFF_ARGS) gold/$*.deps $*.deps ;\
 	else \
 		echo "gold/$*.deps not found" ;\
 		false ;\
 	fi
 	@if [ -f gold/$*.out ]; then \
 		echo diff gold/$*.out $*.out ;\
-		diff gold/$*.out $*.out ;\
+		diff $(DIFF_ARGS) gold/$*.out $*.out ;\
 		echo diff gold/$*.out $*.deps.out ;\
-		diff gold/$*.out $*.deps.out ;\
+		diff $(DIFF_ARGS) gold/$*.out $*.deps.out ;\
 	else \
 		echo "gold/$*.out not found" ;\
 		false ;\
 	fi
 	@if [ -f gold/$*.err ]; then \
 		echo diff gold/$*.err $*.err ;\
-		diff gold/$*.err $*.err ;\
+		diff $(DIFF_ARGS) gold/$*.err $*.err ;\
 		echo diff gold/$*.err $*.deps.err ;\
-		diff gold/$*.err $*.deps.err ;\
+		diff $(DIFF_ARGS) gold/$*.err $*.deps.err ;\
 	else \
 		echo "gold/$*.err not found" ;\
 		false ;\
