@@ -4600,9 +4600,6 @@ sub VP3::Preprocessor::standard::_eval
                 $emit_line_marker = 0;
             }
 
-            #$line =~ /^(?:(\s*)\@(\w+)\s*)?(.*\n)$/ or VP3::fatal ("in preprocessor");
-            #my ($indent, $directive, $rest) = ($1, $2, $3);
-
             if ($self->{state} == ST_COMMENT && $line =~ m/$re_comment_body/gc) {
 
                 if ($1) {
@@ -4664,7 +4661,16 @@ sub VP3::Preprocessor::standard::_eval
                     }
 
                     next;
+                } elsif ($directive eq "depend") {
+                    if ($rest =~ /^"(.+)"\s*$/) {
+                        # Note that $self->depend is not purely a
+                        # directive-implementing function
+                        $self->depend ("inc", $1);
+                    } else {
+                        VP3::error ("Illegal \@depend directive");
+                    }
 
+                    next;
                 } elsif ($directive eq "ifdef") {
                     if ($rest =~ /^(\w+)\s*$/) {
                         my $cond = exists ($self->{defines}->{$1});

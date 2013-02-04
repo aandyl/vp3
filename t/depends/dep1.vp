@@ -1,2 +1,3 @@
+@depend "some_file"
 @include "header.vh"
 @include parse_error
