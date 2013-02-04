@@ -21,8 +21,14 @@ fi
 endef
 
 # Suppress diffs that look like error messages from EP3 and that contain a line
-# number reference, so we're not overly sensitive to changes in the EP3 script.
+# number reference, so we're not overly sensitive to changes in EP3.
 DIFF_ARGS := -I 'EP3 error: .*line [0-9]\+'
+
+# By default deps.out and deps.err are diff'ed against the same golden output
+# as non-depends-mode. However, if a .deps.err file exists in the golden
+# directory, that is used instead. Several of the depends-mode tests use this,
+# since messages about generation of debug files aren't printed in depends
+# mode.
 
 .PRECIOUS: %.diff
 %.diff: %.run_vp3
@@ -46,8 +52,8 @@ DIFF_ARGS := -I 'EP3 error: .*line [0-9]\+'
 	@if [ -f gold/$*.err ]; then \
 		echo diff gold/$*.err $*.err ;\
 		diff $(DIFF_ARGS) gold/$*.err $*.err ;\
-		echo diff gold/$*.err $*.deps.err ;\
-		diff $(DIFF_ARGS) gold/$*.err $*.deps.err ;\
+		echo diff $(firstword $(wildcard gold/$*.deps.err gold/$*.err)) $*.deps.err ;\
+		diff $(DIFF_ARGS) $(firstword $(wildcard gold/$*.deps.err gold/$*.err)) $*.deps.err ;\
 	else \
 		echo "gold/$*.err not found" ;\
 		false ;\

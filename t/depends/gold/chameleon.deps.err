@@ -1,3 +1,2 @@
 ERROR: Couldn't find definition for chameleon_other_mod
 ERROR: Can't auto-instance `chameleon_other_mod' without its definition
-Expanded Verilog has been saved in chameleon.vp.debug

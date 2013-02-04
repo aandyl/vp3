@@ -537,7 +537,10 @@ sub VP3::Preprocessor::standard::_eval
         my $p = VP3::Parser->new;
         $p->scope (VP3::ParseTree->factory ("module_declaration"));
         $p->YYData->{lexer} = VP3::Lexer->new ($mode);
-        $p->YYData->{lexer}->open (\$text) or VP3::fatal ("Couldn't parse internally generated verilog");
+
+        open (my $fh, "<", \$text)
+            or VP3::fatal ("unable to open string as a filehandle: $!");
+        $p->YYData->{lexer}->input ($fh, undef);
 
         $p->YYParse (
                      yylex   => sub { $_[0]->YYData->{lexer}->lex (@_[1..$#_]) },
@@ -3839,23 +3842,22 @@ sub VP3::Preprocessor::standard::_eval
         return bless $self, $class;
     }
 
-    sub open
+    sub input
     {
-        my ($self) = shift;
+        use Scalar::Util qw(openhandle);
+
+        my ($self, $fh, $name) = @_;
 
         if ($self->{fh} || @{$self->{source}}) {
             VP3::fatal ("lexer input stream is already open");
         }
 
-        # Calling IO::File->open to read from a scalar works in 5.10 but not 5.8.8
-
-        $self->{fh} = IO::File->new or return undef;
-        CORE::open ($self->{fh}, "<", @_) or return undef;
-
-        if (-f $_[0]) {
-            $self->{file} = $_[0];
+        unless (openhandle ($fh)) {
+            VP3::fatal ("\$fh argument isn't an open handle");
         }
 
+        $self->{fh}     = $fh;
+        $self->{file}   = $name;
         $self->{buffer} = "";
 
         1;
@@ -4875,7 +4877,7 @@ sub VP3::Preprocessor::standard::_eval
         $self->{fh}->close;
         $self->{output}->close;
 
-        return 1;
+        return !$VP3::error_count ? 1 : undef;
     }
 
 } # package VP3::Preprocessor::standard
@@ -5017,7 +5019,7 @@ BEGIN {
 }
 
 our ($debug);
-our ($include_dirs)  = [ ];
+our ($include_dirs)  = [ "." ];
 our ($library_dirs)  = [ ];
 our ($library_files) = [ ];
 
@@ -5133,12 +5135,12 @@ sub debug { $debug }
 
 sub parse
 {
-    my ($self, $file, $basename, $depend_cb, $error_ref) = @_;
+    my ($self, $fh, $name, $basename, $depend_cb, $error_ref) = @_;
 
     my $p = VP3::Parser->new;
     $p->YYData->{lexer} = VP3::Lexer->new;
     $p->YYData->{lexer}->depend_cb ($depend_cb);
-    $p->YYData->{lexer}->open ($file) or VP3::error ("Couldn't open `$file': $!");
+    $p->YYData->{lexer}->input ($fh, $name);
 
     for (@{$self->{v_defines}}) {
         my ($name, $value) = split ('=', $_);
@@ -5157,12 +5159,17 @@ sub parse
         or ($$error_ref = $p->YYData->{error}, undef);
 }
 
-sub save_pass1out
+sub write_debug_file
 {
 
-    my ($self) = @_;
+    my ($self, $desc, $output) = @_;
 
-    my $save_file = $self->{input} . ".preprocessed";
+    if ($self->{depends_mode}) {
+        # Don't generate debug files in depends mode.
+        return;
+    }
+
+    my $save_file = $self->{input} . ".debug";
     my $fh;
 
     if (-f $save_file) {
@@ -5170,56 +5177,88 @@ sub save_pass1out
 
         unless ($fh = IO::File->new ($save_file, "r+")) {
             VP3::error ("couldn't open $save_file: $!");
-            return "Preprocessor output not saved to $save_file due to error";
+            print STDERR "${desc} not saved to $save_file due to error\n";
+            return;
         }
 
-        if ($fh->getline ne "$signature\n") {
-            return "Preprocessor output not saved because $save_file already exists";
+        my $line = $fh->getline;
+        if (!$line || $line ne "$signature\n") {
+            print STDERR "${desc} not saved because $save_file already exists\n";
+            return;
         }
 
         unless ($fh->truncate (0) && $fh->seek (0, SEEK_SET)) {
             VP3::error ("error truncating $save_file");
-            return "Preprocessor output not saved to $save_file due to error";
+            print STDERR "${desc} not saved to $save_file due to error\n";
+            return;
         }
     } else {
         # File doesn't exist.
 
         unless ($fh = IO::File->new ($save_file, O_WRONLY | O_CREAT | O_EXCL)) {
             VP3::error ("couldn't open $save_file: $!");
-            return "Preprocessor output not saved to $save_file due to error";
+            print STDERR "${desc} not saved to $save_file due to error\n";
+            return;
         }
     }
 
-    $fh->print ("$signature\n\n");
-    $fh->flush;
+    File::Copy::copy ($output, $fh);
 
-    File::Copy::copy ($self->{pass1out}->filename, $fh);
-
-    "Preprocessor output has been saved in $save_file";
+    print STDERR "${desc} has been saved in $save_file\n";
 
 }
 
-sub analyze
+sub parse_pass1out
 {
     my ($self) = @_;
     my $error;
-    my $conn_db;
     my $vdb;
+
+    {
+        # Insert the signature line before we parse, so line numbers in error
+        # messages will match up
+        my $tmp = IO::File->new_tmpfile;
+        $tmp->print ("$signature\n\n");
+        $tmp->flush;
+
+        my $fh = IO::File->new ($self->{pass1out}, "r")
+            or VP3::error_fatal ("can't open $self->{pass1out} for reading: $!");
+
+        File::Copy::copy ($fh, $tmp);
+        $tmp->flush;
+        $tmp->seek (0, SEEK_SET);
+        $self->{pass1out} = $tmp;
+    }
+
+    # !!! The parser closes the file when it finishes, so give it a copy. Is there a better way?
+    my $tmp = IO::File->new_from_fd ($self->{pass1out}, "r")
+        or VP3::error_fatal ("new_from_fd failed: $!");
 
     my $depend_cb = sub {
         $self->depend (@_);
     };
 
-    $vdb = $self->{vp3}{vdb} = $self->parse ($self->{pass1out}->filename,
+    $vdb = $self->{vp3}{vdb} = $self->parse ($tmp,
+                                             $self->{input},
                                              $self->{basename},
                                              $depend_cb,
                                              \$error);
 
     unless ($vdb) {
-        VP3::error ("While reading first pass output:", $error);
-        print STDERR $self->save_pass1out, "\n";
+        VP3::error ($error);
+        $self->{pass1out}->seek (0, SEEK_SET);
+        $self->write_debug_file ("Preprocessor output", $self->{pass1out});
         return undef;
     }
+
+    return 1;
+}
+
+sub analyze
+{
+    my ($self) = @_;
+    my $vdb = $self->{vp3}{vdb};
+    my $conn_db;
 
     #print STDERR "*** BEGIN analyze $self->{pass1out} parse tree ***\n";
     #print STDERR Dumper ($self->{vp3}{vdb});
@@ -5312,18 +5351,18 @@ sub analyze
     }
 
     if ($error_count) {
-        print STDERR $self->save_pass1out, "\n";
         return undef;
     }
 
     1;
 }
 
-sub output_verilog
-{
+# Write the output verilog to a temp file, and return the temp file object.
 
+sub generate_verilog
+{
     my $self = $_[0];
-    my $output = "";
+    my $output;
 
     my $emit = sub {
         no warnings 'recursion';
@@ -5340,6 +5379,20 @@ sub output_verilog
     my $v = VP3::ParseTreeVisitor->new ($emit);
     $v->visit ($self->{vp3}{vdb});
 
+    my $fh = IO::File->new_tmpfile or VP3::error_fatal ("can't create temporary file");
+
+    $fh->print ($output);
+    $fh->flush;
+    $fh->seek (0, SEEK_SET);
+
+    $fh;
+}
+
+sub output_verilog
+{
+
+    my $self = $_[0];
+    my $tmp = $_[1];
     my $fh;
 
     if ($self->{output} ne "-") {
@@ -5349,8 +5402,7 @@ sub output_verilog
         $fh = *STDOUT{IO};
     }
 
-    print $fh "$signature\n\n";
-    print $fh $output;
+    File::Copy::copy ($tmp, $fh);
 
 }
 
@@ -5463,9 +5515,17 @@ sub ports
 
     for (@search_files) {
         my ($dep_type, $file) = @$_;
+        my $fh;
 
         next unless -f $file;
 
+        unless ($fh = IO::File->new ($file)) {
+            VP3::warning ("while searching for $module, couldn't open $file: $!");
+            next;
+        }
+
+        # If we happened to parse this module previously, record the
+        # dependencies, and then return the cached copy.
         if (my $cached_module = $self->find_module_in_cache ($module, $file)) {
             if ($cached_module->is_opp) {
                 $self->depend ($dep_type, $dep_type eq "vlib" ? $file : $module);
@@ -5476,13 +5536,15 @@ sub ports
 
         $debug && print STDERR "Looking for ports of $module in $file\n";
 
+        # Collect dependencies in this list, but don't record them until we
+        # know we're going to use the module.
         my @depends;
         my $depend_cb = sub {
             push @depends, [ @_ ];
         };
 
         my $error;
-        my $vroot = $self->parse ($file, undef, $depend_cb, \$error);
+        my $vroot = $self->parse ($fh, $file, undef, $depend_cb, \$error);
 
         if (!$vroot) {
             VP3::warning ("While searching for $module, couldn't parse $file:\n$error");
@@ -5586,14 +5648,31 @@ sub process
         return undef;
     }
 
+    # Verilog parse
+
+    my $parse_result = $self->parse_pass1out;
+
+    if (!$parse_result) {
+        if ($self->{depends_mode}) {
+            $self->output_depends;
+        }
+        return undef;
+    }
+
     # Second pass - verilog analysis and generation
 
     my $analyze_result = $self->analyze;
 
     if ($self->{depends_mode}) {
         $self->output_depends;
-    } elsif ($analyze_result) {
-        $self->output_verilog;
+    } else {
+        my $tmp = $self->generate_verilog;
+        
+        if ($analyze_result) {
+            $self->output_verilog ($tmp);
+        } else {
+            $self->write_debug_file ("Expanded Verilog", $tmp);
+        }
     }
 
     return $analyze_result

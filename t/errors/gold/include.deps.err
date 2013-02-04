@@ -1,4 +1,3 @@
 ERROR: Couldn't find include file missing.vh
 ERROR: Undefined text macro, or unsupported compiler directive `MISSING_MACRO
 ERROR: Parse error at ; on line 6
-Preprocessor output has been saved in include.vp.debug

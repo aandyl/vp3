@@ -1,4 +1,2 @@
-ERROR: couldn't find include file header.vh
-ERROR: While reading first pass output:
-       Parse error at IDENTIFIER on line 2
-Preprocessor output has been saved in dep2.vp.preprocessed
+ERROR: Parse error at IDENTIFIER on line 3
+Preprocessor output has been saved in dep2.vp.debug
