@@ -2,9 +2,25 @@
 
 //|@Module -v2k;
 module ranges (
-      output wire [0:0] degenerateVector
+      output wire [7:0] aVector
+    , output wire [15:0] bVector
+    , output wire [7:0] cVector
+    , output wire [15:8] dVector
+    , output wire [0:0] degenerateVector
 );
 
+parameter WIDTH = 8;
+
+//|@Vector WIDTH       aVector;
+//|@Vector 2*WIDTH     bVector;
+//|@Vector [WIDTH-1:0] cVector;
+//|@Vector [15:WIDTH]  dVector;
+
 assign degenerateVector[0:0] = 1'b1;
+
+assign aVector = 0;
+assign bVector = 0;
+assign cVector = 0;
+assign dVector = 0;
 
 endmodule

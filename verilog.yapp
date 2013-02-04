@@ -1902,9 +1902,9 @@ vp3_instance_directive: '@Instance'
                         }
                       ;
 
-vp3_vector_directive: '@Vector' UNSIGNED_NUMBER IDENTIFIER ';' { $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]);
-                                                                 f ("vp3_vector_directive", @_[2,3]) }
-                    ;
+vp3_vector_directive:   '@Vector' constant_expression IDENTIFIER ';' { $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]); f ("vp3_vector_directive", @_[2,3]) }
+                      | '@Vector' range               IDENTIFIER ';' { $_[2]->prepend_text ($_[1]); $_[3]->append_text ($_[4]); f ("vp3_vector_directive", @_[2,3]) }
+                      ;
 
 vp3_force_directive:   '@Input' IDENTIFIER ';' { $_[2]->prepend ($_[1]); $_[2]->append ($_[3]);
                                                  f ("vp3_force_directive", "input", $_[2]) }
