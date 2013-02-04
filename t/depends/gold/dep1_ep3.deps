@@ -1,2 +1,2 @@
 inc some_file
-inc /home/andyl/vp3/t/depends/header.vh
+inc header.vh
