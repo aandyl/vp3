@@ -5005,6 +5005,7 @@ use File::Temp qw();
 use File::Copy qw();
 use File::Spec;
 use Class::Struct;
+use Scalar::Util qw(blessed);
 
 BEGIN {
     struct (
@@ -5092,6 +5093,29 @@ sub error_fatal {
 sub fatal {
     my $msg = "INTERNAL ERROR: " . join ("\n                ", @_) . "\n";
     confess $msg;
+}
+
+##
+
+# Work around for bug in interaction between File::Copy and File::Temp.
+# File::Copy chokes on File::Temp objects because they overload
+# stringify but not eq. Believe this is fixed in newer perls.
+
+sub file_copy
+{
+    my ($a, $b) = @_;
+
+    if (blessed ($a) && $a->isa ("File::Temp")) {
+        $a = IO::Handle->new_from_fd ($a->fileno, "r")
+            or VP3::error_fatal ("new_from_fd failed: $!");
+    }
+
+    if (blessed ($b) && $b->isa ("File::Temp")) {
+        $b = IO::Handle->new_from_fd ($b->fileno, "w")
+            or VP3::error_fatal ("new_from_fd failed: $!");
+    }
+
+    File::Copy::copy ($a, $b);
 }
 
 ##
@@ -5214,7 +5238,7 @@ sub write_debug_file
         }
     }
 
-    File::Copy::copy ($output, $fh);
+    file_copy ($output, $fh);
 
     print STDERR "${desc} has been saved in $save_file\n";
 
@@ -5229,28 +5253,23 @@ sub parse_pass1out
     {
         # Insert the signature line before we parse, so line numbers in error
         # messages will match up
-        my $tmp = IO::File->new_tmpfile;
+        my $tmp = File::Temp->new;
         $tmp->print ("$signature\n\n");
         $tmp->flush;
 
-        my $fh = IO::File->new ($self->{pass1out}, "r")
-            or VP3::error_fatal ("can't open $self->{pass1out} for reading: $!");
-
-        File::Copy::copy ($fh, $tmp);
+        file_copy ($self->{pass1out}->filename, $tmp);
         $tmp->flush;
-        $tmp->seek (0, SEEK_SET);
         $self->{pass1out} = $tmp;
     }
 
-    # !!! The parser closes the file when it finishes, so give it a copy. Is there a better way?
-    my $tmp = IO::File->new_from_fd ($self->{pass1out}, "r")
-        or VP3::error_fatal ("new_from_fd failed: $!");
+    my $fh = IO::File->new ($self->{pass1out}->filename, "r")
+        or VP3::error_fatal ("can't open " . $self->{pass1out}->filename . " for reading: $!");
 
     my $depend_cb = sub {
         $self->depend (@_);
     };
 
-    $vdb = $self->{vp3}{vdb} = $self->parse ($tmp,
+    $vdb = $self->{vp3}{vdb} = $self->parse ($fh,
                                              $self->{input},
                                              $self->{basename},
                                              $depend_cb,
@@ -5258,8 +5277,7 @@ sub parse_pass1out
 
     unless ($vdb) {
         VP3::error ($error);
-        $self->{pass1out}->seek (0, SEEK_SET);
-        $self->write_debug_file ("Preprocessor output", $self->{pass1out});
+        $self->write_debug_file ("Preprocessor output", $self->{pass1out}->filename);
         return undef;
     }
 
@@ -5391,11 +5409,10 @@ sub generate_verilog
     my $v = VP3::ParseTreeVisitor->new ($emit);
     $v->visit ($self->{vp3}{vdb});
 
-    my $fh = IO::File->new_tmpfile or VP3::error_fatal ("can't create temporary file");
+    my $fh = File::Temp->new or VP3::error_fatal ("can't create temporary file");
 
     $fh->print ($output);
     $fh->flush;
-    $fh->seek (0, SEEK_SET);
 
     $fh;
 }
@@ -5409,12 +5426,12 @@ sub output_verilog
 
     if ($self->{output} ne "-") {
         $fh = IO::File->new ($self->{output}, "w")
-            or VP3::error_fatal ("can't open `$self->{output}' for writing: $!");
+            or VP3::error_fatal ("can't open `" . $self->{output} . "' for writing: $!");
     } else {
         $fh = *STDOUT{IO};
     }
 
-    File::Copy::copy ($tmp, $fh);
+    file_copy ($tmp, $fh);
 
 }
 
@@ -5681,9 +5698,9 @@ sub process
         my $tmp = $self->generate_verilog;
         
         if ($analyze_result) {
-            $self->output_verilog ($tmp);
+            $self->output_verilog ($tmp->filename);
         } else {
-            $self->write_debug_file ("Expanded Verilog", $tmp);
+            $self->write_debug_file ("Expanded Verilog", $tmp->filename);
         }
     }
 
