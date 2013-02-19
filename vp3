@@ -106,7 +106,7 @@ Optional. Enables additional debug output.
 Optional. Defines the Verilog preprocessor macro `NAME, either with an empty
 expansion, or as VALUE. 
 
-=item -d NAME[=VALUE], --define NAME[=VALUE]
+=item --define NAME[=VALUE]
 
 Optional. Defines the VP3 preprocessor macro NAME, either with an empty
 expansion, or as VALUE.
