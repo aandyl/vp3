@@ -4933,7 +4933,9 @@ sub VP3::Preprocessor::standard::_eval
     {
         my ($self, $key, $value) = @_;
 
-        push @{$self->{defines}}, defined ($value) ? join ("=", $key, $value) : $key;
+        # EP3 chokes if there's no value (no equals sign) when defining things
+        # via ep3_defines, so always include the equals sign.
+        push @{$self->{defines}}, join ("=", $key, defined ($value) ? $value : "");
     }
 
     sub process
