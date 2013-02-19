@@ -62,7 +62,7 @@ DIFF_ARGS := -I 'EP3 error: .*line [0-9]\+'
 
 .PRECIOUS: %.build
 %.build: %.run_vp3
-	iverilog -o /dev/null -y . $*.v 2>/dev/null
+	iverilog -o /dev/null -y . $(BUILD_OPTS.$*) $*.v 2>/dev/null
 	@touch $@
 
 all: $(TOP:%.v=%.build) $(FILES:%.v=%.diff)

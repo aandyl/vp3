@@ -111,6 +111,11 @@ expansion, or as VALUE.
 Optional. Defines the VP3 preprocessor macro NAME, either with an empty
 expansion, or as VALUE.
 
+=item --vinclude path
+
+Optional. Specifies include paths in which to search for Verilog C<`include>
+files.
+
 =item -i path, --include path
 
 Optional. Specifies include paths in which to search for VP3 preprocessor
@@ -2899,8 +2904,7 @@ sub VP3::Preprocessor::standard::_eval
         }
 
         my $I;
-        my $dtext = VP3::Utils::directive_comment ($target, \$I);
-        $rtn .= $dtext;
+        my $dtext = VP3::ParseTree->factory ("whitespace", VP3::Utils::directive_comment ($target, \$I));
 
         my $ports;
         if ($target->file) {
@@ -2955,14 +2959,14 @@ sub VP3::Preprocessor::standard::_eval
         my ($tree, $error);
         unless ($tree = $self->parse ("VP3_PARSE_MODE_MODULE_ITEMS", $rtn, \$error)) {
             VP3::error ("While parsing generated instantiation:\n$error\nInstantiation follows:\n$rtn");
-            return VP3::ParseTree->factory ("whitespace", $dtext);
+            return $dtext;
         }
 
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
         # Return the new tree; will replace the vp3_instance_directive node
-        $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $rtn);
+        ($dtext, $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $rtn));
 
     }
 
@@ -3037,12 +3041,12 @@ sub VP3::Preprocessor::standard::_eval
     sub visit_vp3_ports_directive
     {
         my ($self, $target) = @_;
-        my $output;
+        my $output = "";
 
         my $module = $self->{module}->module_identifier;
 
         my $indent;
-        $output .= VP3::Utils::directive_comment ($target, \$indent);
+        my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
         my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
         for my $ident (sort $conndb->signals) {
@@ -3074,18 +3078,18 @@ sub VP3::Preprocessor::standard::_eval
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
-        $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
+        ($dtext, $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output));
     }
 
     sub visit_vp3_regs_directive
     {
         my ($self, $target) = @_;
-        my $output;
+        my $output = "";
 
         my $module = $self->{module}->module_identifier;
 
         my $indent;
-        $output .= VP3::Utils::directive_comment ($target, \$indent);
+        my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
         my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
         for my $ident (sort $conndb->signals) {
@@ -3104,19 +3108,19 @@ sub VP3::Preprocessor::standard::_eval
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
-        $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
+        ($dtext, $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output));
     }
 
     sub visit_vp3_wires_directive
     {
         my ($self, $target) = @_;
-        my $output;
+        my $output = "";
 
         my $module = $self->{module}->module_identifier;
 
         my $indent;
 
-        $output .= VP3::Utils::directive_comment ($target, \$indent);
+        my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
         #print Dumper ($self->{vp3}{vp3}{connectivity});
         my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
@@ -3137,7 +3141,7 @@ sub VP3::Preprocessor::standard::_eval
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
-        $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output);
+        ($dtext, $tree->type ne "null" ? @{$tree->children} : VP3::ParseTree->factory ("whitespace", $output));
     }
 
     sub visit_passthrough_directive
@@ -3157,12 +3161,12 @@ sub VP3::Preprocessor::standard::_eval
     sub visit_vp3_module_directive
     {
         my ($self, $target) = @_;
-        my $output;
+        my $output = "";
 
         my $module = $target->module_identifier;
         my $indent;
 
-        $output .= VP3::Utils::directive_comment ($target, \$indent);
+        my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
         $output .= "${indent}module " . $module . " (\n";
 
@@ -3210,7 +3214,7 @@ sub VP3::Preprocessor::standard::_eval
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
-        $tree;
+        $tree->prepend ($dtext);
     }
 
 } # package VP3::Translator
@@ -3263,7 +3267,7 @@ sub VP3::Preprocessor::standard::_eval
 
         while ($node = shift @front) {
             if ($node->type eq "whitespace") {
-                $front .= $node->emit;
+                $front .= $node->emit (&VP3::ParseTree::VISIBLE_ONLY);
             } else {
                 $self .= $node->emit;
                 last;
@@ -3278,7 +3282,7 @@ sub VP3::Preprocessor::standard::_eval
 
         while ($node = pop @back) {
             if ($node->type eq "whitespace") {
-                $back = $node->emit . $back;
+                $back = $node->emit (&VP3::ParseTree::VISIBLE_ONLY) . $back;
             } else {
                 push @back, $node;
                 last;
@@ -3849,6 +3853,7 @@ sub VP3::Preprocessor::standard::_eval
             #start_of_line   => 0,
             ifdefs          => VP3::Conditionals->new,
             defines         => { },
+            includes        => [ ],
             parse_mode      => $parse_mode,
         };
         return bless $self, $class;
@@ -4290,14 +4295,34 @@ sub VP3::Preprocessor::standard::_eval
         $self->{depend_cb} && $self->{depend_cb}->(@_);
     }
 
+    sub include_path
+    {
+        my ($self, $path) = @_;
+
+        push @{$self->{includes}}, $path;
+    }
+
+    sub find_include
+    {
+        my ($self, $file) = @_;
+
+        $self->depend ("vinc", $file);
+
+        for (@{$self->{includes}}) {
+            my $path = File::Spec->catfile ($_, $file);
+
+            return $path if -f $path;
+        }
+
+        return undef;
+    }
+
     sub include
     {
         my ($self, $ifile) = @_;
         my ($fh);
 
-        $self->depend ("vinc", $ifile);
-
-        my $file = VP3::find_include ($ifile);
+        my $file = $self->find_include ($ifile);
         unless ($file) {
             VP3::error ("Couldn't find include file $ifile");
             return;
@@ -5034,7 +5059,6 @@ BEGIN {
 }
 
 our ($debug);
-our ($include_dirs)  = [ "." ];
 our ($library_dirs)  = [ ];
 our ($library_files) = [ ];
 
@@ -5138,6 +5162,8 @@ sub new
         output          => "-",
         v_defines       => [ ],
         pp_defines      => [ ],
+        v_includes      => [ "." ],
+        pp_includes     => [ "." ],
     };
 
     GetOptions (
@@ -5147,7 +5173,8 @@ sub new
         "debug"         => \$debug,
         "vdefine=s\@"   => $self->{v_defines},
         "define=s\@"    => $self->{pp_defines},
-        "include=s\@"   => $include_dirs,
+        "vinclude=s\@"  => $self->{v_includes},
+        "include=s\@"   => $self->{pp_includes},
         "v=s\@"         => $library_files,
         "y=s\@"         => $library_dirs,
         "w"             => \$self->{warnings_as_errors},
@@ -5185,6 +5212,10 @@ sub parse
         defined ($value) or $value = "";
 
         $p->YYData->{lexer}->define ($name, $value);
+    }
+
+    for (@{$self->{v_includes}}) {
+        $p->YYData->{lexer}->include_path ($_);
     }
 
     $p->YYData->{basename} = $basename;
@@ -5628,20 +5659,6 @@ sub ports
 
 }
 
-sub find_include
-{
-    my ($include) = @_;
-
-    my @search = ($include);
-
-    for (@search) {
-        return $_ if -f $_;
-    }
-
-    undef;
-
-}
-
 sub process
 {
 
@@ -5655,7 +5672,7 @@ sub process
     my $pp = $pp_class->new or die "Failed to create preprocessor object";
 
     $pp->depends_mode ($self->{depends_mode});
-    $pp->includes (@$include_dirs);
+    $pp->includes (@{$self->{pp_includes}});
 
     for (@{$self->{pp_defines}}) {
         my ($name, $value) = split ('=', $_);

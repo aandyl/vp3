@@ -19,7 +19,11 @@ ranges.v \
 
 # Build options
 
-VP3_OPTS := --vdefine SYNTHESIS=YES --vdefine BUGABOO -y .
+VP3_OPTS := -y .
+
+VP3_OPTS.defines := --vdefine SYNTHESIS=YES --vdefine BUGABOO --vinclude ../include -y .
+
+BUILD_OPTS.defines := -I ../include
 
 TOP := \
 syntax.v \

@@ -1,0 +1,236 @@
+module syntax (
+      input wire [3:0] bar
+    , input wire  clk
+    , output wire  d00def
+    , output wire  d01def
+    , output wire  d03def
+    , input wire  d1
+    , output wire  d10def
+    , output wire  d11def
+    , output wire  d13undef
+    , input wire  d2
+    , output wire  d20def
+    , output wire  d21undef
+    , output wire  d30undef
+    , output wire  d32def
+    , output wire  d40undef
+    , output wire  d42undef
+    , input wire [1:0] iport
+    , input wire [1:0] oport
+    , output reg  q1
+    , output reg  q2
+    , output wire [7:0] test1
+    , input wire [7:0] test2
+    , output wire  test4a
+    , output wire  test4b
+    , output wire  test5
+);
+
+//|@Regs ;
+reg  test6;
+//|@Wires ;
+wire [15:0] foo;
+wire [7:0] range0;
+
+//|@Vector 16 foo;
+//|@Vector 4 bar;
+//|@Vector 2 oport;
+//|@Vector 2 iport;
+
+integer no_implicit_decl_1;
+integer no_implicit_decl_2;
+
+reg [31:0] mem[0:4095];
+
+// Escaped identifiers
+wire \escaped(1) = 1'b0;
+wire \escaped[2] = 1'b0;
+wire \$escaped3 = 1'b0;
+
+// Numbers with underscores
+wire num1 = 1_000;
+wire num2 = 4'd1_2;
+
+//|@Waive no_sink num1;
+//|@Waive no_sink num2;
+
+// +: and -: ranges
+
+//|@Vector 8 range0;
+
+wire [3:0] range1 = range0[4+:4];
+wire [3:0] range2 = range0[3-:4];
+
+assign range0 = 8'h00;
+//|@Waive no_sink range1;
+//|@Waive no_sink range2;
+
+//
+
+assign foo = {16{quux}} & {4{bar[3:0]}};
+
+wire quux = ^testfunc ({ 2 { bar } }) & foo[bar[3:0]];
+
+always @(*) q1 = d1;
+always @* q2 = d2;
+
+assign test1[7:0] = 
+    (1'b1 //comment && //comment
+     /*comment &&*/
+     /*comment*/) ?
+    test2[7:0] :
+    8'h00;
+
+assign test4a = sub0.dummy1;
+
+assign test4b = sub0.dummy2[0];
+
+//|@Output test5 ;
+
+// Test real delay value
+always #1.1 test6 = ~test6;
+
+// Test handling of system task/function arguments
+initial $systask (no_implicit_decl_1);
+
+always @(posedge clk)
+    no_implicit_decl_2 <= 0;
+
+syntax_sub sub0 (.oport(oport[1:0]), .iport(iport[1:0]));
+
+// Test null connects
+@Instance syntax_sub sub1 -connect oport "" -connect iport "" ;
+
+// Test parsing of module instantiation with no connections
+syntax_sub sub2 ();
+
+function [7:0] testfunc (input [7:0] in);
+  testfunc = { in[6:0], 1'b0 } ^ { 8 { in[7] } } & 8'h22;
+endfunction
+
+`define d00
+`define d01
+`define d02
+`define d03
+`ifdef d00
+    assign d00def = 1'b1;
+    `ifdef d01
+        assign d01def = 1'b1;
+        `ifdef d03
+            assign d03def = 1'b1;
+        `else
+            assign d03undef = 1'b1;
+        `endif
+    `else
+        assign d01undef = 1'b1;
+    `endif
+`else
+    assign d00undef = 1'b1;
+    `ifdef d02
+        assign d02def = 1'b1;
+    `else
+        assign d02undef = 1'b1;
+    `endif
+`endif
+
+`define d10
+`define d11
+`define d12
+//`define d13
+`ifdef d10
+    assign d10def = 1'b1;
+    `ifdef d11
+        assign d11def = 1'b1;
+        `ifdef d13
+            assign d13def = 1'b1;
+        `else
+            assign d13undef = 1'b1;
+        `endif
+    `else
+        assign d11undef = 1'b1;
+    `endif
+`else
+    assign d10undef = 1'b1;
+    `ifdef d12
+        assign d12def = 1'b1;
+    `else
+        assign d12undef = 1'b1;
+    `endif
+`endif
+
+`define d20
+//`define d21
+`define d22
+`define d23
+`ifdef d20
+    assign d20def = 1'b1;
+    `ifdef d21
+        assign d21def = 1'b1;
+        `ifdef d23
+            assign d23def = 1'b1;
+        `else
+            assign d23undef = 1'b1;
+        `endif
+    `else
+        assign d21undef = 1'b1;
+    `endif
+`else
+    assign d20undef = 1'b1;
+    `ifdef d22
+        assign d22def = 1'b1;
+    `else
+        assign d22undef = 1'b1;
+    `endif
+`endif
+
+//`define d30
+`define d31
+`define d32
+`define d33
+`ifdef d30
+    assign d30def = 1'b1;
+    `ifdef d31
+        assign d31def = 1'b1;
+        `ifdef d33
+            assign d33def = 1'b1;
+        `else
+            assign d33undef = 1'b1;
+        `endif
+    `else
+        assign d31undef = 1'b1;
+    `endif
+`else
+    assign d30undef = 1'b1;
+    `ifdef d32
+        assign d32def = 1'b1;
+    `else
+        assign d32undef = 1'b1;
+    `endif
+`endif
+
+//`define d40
+`define d41
+//`define d42
+`define d43
+`ifdef d40
+    assign d40def = 1'b1;
+    `ifdef d41
+        assign d41def = 1'b1;
+        `ifdef d43
+            assign d43def = 1'b1;
+        `else
+            assign d43undef = 1'b1;
+        `endif
+    `else
+        assign d41undef = 1'b1;
+    `endif
+`else
+    assign d40undef = 1'b1;
+    `ifdef d42
+        assign d42def = 1'b1;
+    `else
+        assign d42undef = 1'b1;
+    `endif
+`endif
+
+endmodule
