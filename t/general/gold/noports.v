@@ -35,3 +35,6 @@ assign d = c;
 
 endmodule
 
+module noports3;
+
+endmodule

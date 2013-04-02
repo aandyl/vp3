@@ -193,6 +193,14 @@ module_preamble:   attr                                  # 1
                    }
                  ;
 
+noport_module_header:   module_preamble ';'                   # 1,2
+                        {
+                            $_[1]->append_text ($_[2]);
+                            $_[1]->append_children (null); # port list
+                        }
+                      ;
+
+
 # !!! should be "list_of_ports" (complex ports syntax)
 traditional_module_header:   module_preamble                       # 1
                              '(' list_of_port_identifiers ')' ';'  # 2,3,4,5
@@ -221,6 +229,13 @@ module_declaration:   traditional_module_header             # 1
                           $_[1]->append_children (@_[2,3]);
                       }
                     | v2k_module_header                     # 1
+                      opt_non_port_module_items             # 2
+                      'endmodule'                           # 3
+                      {
+                          $_[0]->scope (undef);
+                          $_[1]->append_children (@_[2,3]);
+                      }
+                    | noport_module_header                  # 1
                       opt_non_port_module_items             # 2
                       'endmodule'                           # 3
                       {
