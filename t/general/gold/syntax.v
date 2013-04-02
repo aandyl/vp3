@@ -21,6 +21,7 @@ module syntax (
     , output wire  d40undef
     , output wire  d42undef
     , input wire [1:0] iport
+    , output wire  nest
     , output wire [1:0] oport
     , output reg  q1
     , output reg  q2
@@ -241,5 +242,11 @@ endfunction
         assign d42undef = 1'b1;
     `endif
 `endif
+
+// Nested text macros
+`define MOUTER `MINNER
+`define MINNER assign nest = 1'b1;
+
+`MOUTER
 
 endmodule

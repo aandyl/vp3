@@ -4380,12 +4380,26 @@ sub VP3::Preprocessor::standard::_eval
             return undef;
         }
 
+        my $expn = $self->{defines}->{$name};
+
+        # !!! detect recursion
+        while ($expn =~ /`(\w+)/g) {
+            if (!exists ($self->{defines}->{$1})) {
+                VP3::error ("Undefined text macro `$1");
+                return 1; # Suppress error
+            }
+
+            &VP3::debug && print STDERR "expand $1 as ", $self->{defines}->{$1}, "\n";
+            substr ($expn, $-[1] - 1, $+[1] - $-[1] + 1) = $self->{defines}->{$1};
+            pos ($expn) = $-[1] - 1;
+        }
+
         $self->flush_whitespace;
         $fh = IO::File->new;
 
         # Calling IO::File->open to read from a scalar works in 5.10 but not 5.8.8
 
-        CORE::open ($fh, "<", \$self->{defines}->{$name})
+        CORE::open ($fh, "<", \$expn)
             or VP3::fatal ("unable to open string as a filehandle: $!");
 
         push @{$self->{source}}, [ $self->{file}, $self->{fh}, $self->{buffer}, $self->{line} ];

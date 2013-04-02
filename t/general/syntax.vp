@@ -206,4 +206,10 @@ endfunction
     `endif
 `endif
 
+// Nested text macros
+`define MOUTER `MINNER
+`define MINNER assign nest = 1'b1;
+
+`MOUTER
+
 endmodule
