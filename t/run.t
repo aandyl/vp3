@@ -5,7 +5,7 @@ our @dirs;
 
 BEGIN {
     # This needs to be ready for "use Test::Simple"
-    @dirs = qw(basic depends general preprocessor errors instance eval);
+    @dirs = qw(basic depends general preprocessor errors instance eval syntax);
 }
 
 use Test::Simple tests => scalar (@dirs);

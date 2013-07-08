@@ -223,17 +223,32 @@ Ends a chain of conditional sections.
 
 Usage:
 
-  @Module [-v2k] [module_identifier] ;
+  @Module [-v2k] [-attr <attributes>] [module_identifier] ;
 
 The C<@Module> directive introduces a module. If the C<module_identifier> is
 not given, the module name will be taken from the name of the input file.
 
-The C<-v2k> option controls whether the generated module header should use the
-Verilog-2001 syntax, which has full port declarations inline with the header.
+The C<@Module> directive accepts the following options:
 
-VP3's port inference functionality, when requested, automatically creates port
-declarations for signals that are undriven or unloaded in the input module
-description. The C<@Module> directive interacts with port inference as follows:
+=over 4
+
+=item -v2k
+
+The C<-v2k> option causes the generated module header to use the Verilog-2001
+syntax, which has full port declarations inline with the header. For more
+detail, see below.
+
+=item -attr <attributes>
+
+The C<-attr> option prints the specified text as attribute(s) on the generated
+module header. The string given should not include the C<(*> and C<*)>
+delimeters.
+
+=back
+
+The C<@Module> directive is useful when using VP3's optional port inference
+function, which automatically creates port declarations for signals that are
+undriven or unloaded in the input module description:
 
 =over 4
 
@@ -407,6 +422,11 @@ generate blocks (accepted by the parser but not otherwise handled)
 =item *
 
 big-endian vectors
+
+=item *
+
+port connection attributes, and some other attribute uses that are (I hope)
+esoteric
 
 =back
 
@@ -2761,7 +2781,10 @@ sub VP3::Preprocessor::standard::_eval
 
         local (@ARGV) = VP3::Utils::directive_words ($text);
 
-        my $rv = GetOptions (v2k => \$self->{v2k});
+        my $rv = GetOptions (
+            v2k => \$self->{v2k},
+            "attr=s" => \$self->{attr},
+        );
         $rv or do {
             VP3::error ("Couldn't parse \@Module directive: $text");
             return VP3::ParseTree->factory (whitespace => $self->emit_self);
@@ -2783,6 +2806,7 @@ sub VP3::Preprocessor::standard::_eval
 
     sub module_identifier { $_[0]->{module_identifier} }
     sub v2k { $_[0]->{v2k} }
+    sub attr { $_[0]->{attr} }
 
 } # package VP3::ParseTree::vp3_module_directive
 
@@ -3168,7 +3192,17 @@ sub VP3::Preprocessor::standard::_eval
 
         my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
-        $output .= "${indent}module " . $module . " (\n";
+        my $attr = $target->attr;
+        if ($attr && length ($attr) > 60) {
+            $attr = "(* ${attr} *)\n${indent}";
+        } elsif ($attr) {
+            # Empty string is false, which is what we want
+            $attr = "(* ${attr} *) ";
+        } else {
+            $attr = "";
+        }
+
+        $output .= "${indent}${attr}module " . $module . " (\n";
 
         my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
         my $comma = "  ";

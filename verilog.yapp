@@ -221,6 +221,11 @@ v2k_module_header:   module_preamble                       # 1
                      }
                    ;
 
+# Note that the *_module_header versions all ultimately use the module_preamble
+# rule, and accept an attribute, while vp3_module_directive does not accept an
+# attribute. (To specify attributes in that case, use the -attr option to the
+# @Module directive.)
+
 module_declaration:   traditional_module_header             # 1
                       opt_module_items                      # 2
                       'endmodule'                           # 3
@@ -242,19 +247,17 @@ module_declaration:   traditional_module_header             # 1
                           $_[0]->scope (undef);
                           $_[1]->append_children (@_[2,3]);
                       }
-                    | attr                                  # 1
-                      vp3_module_directive                  # 2
+                    | vp3_module_directive                  # 1
                       {
-                          $_[2]->prepend_text ($_[1]);
-                          my $obj = f ("vp3_module_declaration", $_[2]);
+                          my $obj = f ("vp3_module_declaration", $_[1]);
                           $_[0]->scope ($obj);
                           $obj;
-                      }                                     # 3
-                      opt_module_items                      # 4
-                      'endmodule'                           # 5
+                      }                                     # 2
+                      opt_module_items                      # 3
+                      'endmodule'                           # 4
                       {
                           $_[0]->scope (undef);
-                          $_[3]->append_children (@_[4,5]);
+                          $_[2]->append_children (@_[3,4]);
                       }
                     ;
 
