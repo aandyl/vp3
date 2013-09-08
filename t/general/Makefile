@@ -3,6 +3,7 @@ default: all
 # What to build
 
 FILES := \
+module_none.v \
 syntax.v \
 syntax_sub.v \
 defines.v \
@@ -39,6 +40,7 @@ ranges.v \
 # Not included in TOP:
 # strengths.v: iverilog doesn't support triregs
 # unparsed.v: syntax errors in unparsed sections
+# module_none.v: not legal Verilog source
 
 # Build exceptions
 
@@ -50,6 +52,8 @@ search.build: search.run_vp3
 # Dependencies
 
 syntax.run_vp3 : syntax_sub.run_vp3
+
+module_none.run_vp3 : syntax_sub.run_vp3
 
 search.run_vp3 : wrongname.run_vp3
 

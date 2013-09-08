@@ -104,7 +104,7 @@ Optional. Enables additional debug output.
 =item --vdefine NAME, --vdefine NAME=VALUE
 
 Optional. Defines the Verilog preprocessor macro `NAME, either with an empty
-expansion, or as VALUE. 
+expansion, or as VALUE.
 
 =item --define NAME[=VALUE]
 
@@ -155,7 +155,7 @@ C<-p ep3> mode.
 
 =item @define NAME value
 
-Defines C<NAME> as a preprocessor macro to be substituted with C<value>. 
+Defines C<NAME> as a preprocessor macro to be substituted with C<value>.
 
 =item @include "file"
 
@@ -163,7 +163,7 @@ Includes the contents of C<file> at the current source location.
 
 =item @perl_begin ... @perl_end
 
-Usage: 
+Usage:
 
   @perl_begin
   # any number of lines of perl code
@@ -223,26 +223,35 @@ Ends a chain of conditional sections.
 
 Usage:
 
-  @Module [-v2k] [-attr <attributes>] [module_identifier] ;
+  @Module [-none] [-v2k] [-attr <attributes>] [module_identifier] ;
 
 The C<@Module> directive introduces a module. If the C<module_identifier> is
 not given, the module name will be taken from the name of the input file.
+Except for the special case of C<@Module -none> (see below), C<@Module> should
+have a corresponding C<endmodule>.
 
 The C<@Module> directive accepts the following options:
 
 =over 4
-
-=item -v2k
-
-The C<-v2k> option causes the generated module header to use the Verilog-2001
-syntax, which has full port declarations inline with the header. For more
-detail, see below.
 
 =item -attr <attributes>
 
 The C<-attr> option prints the specified text as attribute(s) on the generated
 module header. The string given should not include the C<(*> and C<*)>
 delimeters.
+
+=item -none
+
+Enter module context, but don't generate any C<module> statement. This may be
+useful to generate files to be inserted in other source using C<`include>. When
+C<@Module -none> is used, do not use C<endmodule>. In this mode, connectivity
+validation is disabled.
+
+=item -v2k
+
+The C<-v2k> option causes the generated module header to use the Verilog-2001
+syntax, which has full port declarations inline with the header. For more
+detail, see below.
 
 =back
 
@@ -573,7 +582,6 @@ sub VP3::Preprocessor::standard::_eval
         $p->YYParse (
                      yylex   => sub { $_[0]->YYData->{lexer}->lex (@_[1..$#_]) },
                      yyerror => \&VP3::Parser::default_yyerror,
-                     #yydebug => 0xF,
                     )
             or ($$error_ref = $p->YYData->{error}, undef);
     }
@@ -622,7 +630,7 @@ sub VP3::Preprocessor::standard::_eval
 
     # This should be improved. Currently the "data" member is only used for
     # parameters, to store the definition in case the parameter needs to be
-    # evaluated. 
+    # evaluated.
 
     sub new
     {
@@ -1865,8 +1873,6 @@ sub VP3::Preprocessor::standard::_eval
     package VP3::ParseTree::source_text;
     use base 'VP3::ParseTree';
 
-    use Data::Dumper;
-
     sub modules
     {
         grep { $_->typeis ("module_declaration") } @{$_[0]->children};
@@ -1903,7 +1909,6 @@ sub VP3::Preprocessor::standard::_eval
         PARAMETER_PORT_LIST => 2,
         PORT_LIST           => 3,
         MODULE_ITEMS        => 4,
-        ENDMODULE_KEYWORD   => 5,
     };
 
     sub new
@@ -2684,7 +2689,7 @@ sub VP3::Preprocessor::standard::_eval
 {
 
     # Used for both function_call and system_function_call
-    # 
+    #
     # Arguments are required for user functions, but optional for system functions
 
     package VP3::ParseTree::function_call;
@@ -2784,6 +2789,7 @@ sub VP3::Preprocessor::standard::_eval
         my $rv = GetOptions (
             v2k => \$self->{v2k},
             "attr=s" => \$self->{attr},
+            none => \$self->{opt_none},
         );
         $rv or do {
             VP3::error ("Couldn't parse \@Module directive: $text");
@@ -2807,6 +2813,7 @@ sub VP3::Preprocessor::standard::_eval
     sub module_identifier { $_[0]->{module_identifier} }
     sub v2k { $_[0]->{v2k} }
     sub attr { $_[0]->{attr} }
+    sub opt_none { $_[0]->{opt_none} }
 
 } # package VP3::ParseTree::vp3_module_directive
 
@@ -3192,63 +3199,71 @@ sub VP3::Preprocessor::standard::_eval
 
         my $dtext = VP3::ParseTree::factory ("whitespace", VP3::Utils::directive_comment ($target, \$indent));
 
-        my $attr = $target->attr;
-        if ($attr && length ($attr) > 60) {
-            $attr = "(* ${attr} *)\n${indent}";
-        } elsif ($attr) {
-            # Empty string is false, which is what we want
-            $attr = "(* ${attr} *) ";
+        my $tree;
+
+        if ($target->opt_none) {
+            $tree = VP3::ParseTree->factory ("null", $dtext);
         } else {
-            $attr = "";
-        }
-
-        $output .= "${indent}${attr}module " . $module . " (\n";
-
-        my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
-        my $comma = "  ";
-        for my $ident (sort $conndb->signals) {
-            my $signal_obj = $conndb->signal ($ident);
-            my $symtab_entry = $self->{module}->symtab->lookup ($ident);
-            my %decl = $signal_obj->implicit_declaration_type;
-
-            # The behavior of @Module is different in v2k and non-v2k mode, as
-            # described in the documentation. In v2k mode, @Module only
-            # generates inferred ports (hence we condition on
-            # implicit_declaration_type specifying input or output). In non-v2k
-            # mode, we generated explicit and inferred ports, so generation is
-            # conditioned on actual connectivity.
-            if ($target->v2k && !$symtab_entry && ($decl{input} || $decl{output})) {
-                my $dir   = $decl{input} ? "input"  : "output";
-                my $src   = $decl{input} ? "source" : "sink"  ;
-                my $type  = $decl{reg}   ? "reg"    : "wire"  ;
-                my $range = $signal_obj->implicit_declaration_range;
-
-                $output .= "${indent}    ${comma}${dir} ${type} ${range} ${ident}\n";
-                $comma = ", ";
-
-                # Inserting in symbol table here prevents a duplicate
-                # declaration by @Regs/@Wires
-                $self->{module}->symtab->insert ($ident => $dir);
-                my $conn = VP3::Connectivity->new (undef, $dir, $src);
-                $signal_obj->add_connectivity ($conn);
-            } elsif (!$target->v2k &&
-                     ($signal_obj->input_connection ||
-                      $signal_obj->output_connection)) {
-                $output .= "${indent}    ${comma}${ident}\n";
-                $comma = ", ";
+            my $attr = $target->attr;
+            if ($attr && length ($attr) > 60) {
+                $attr = "(* ${attr} *)\n${indent}";
+            } elsif ($attr) {
+                # Empty string is false, which is what we want
+                $attr = "(* ${attr} *) ";
+            } else {
+                $attr = "";
             }
+
+            $output .= "${indent}${attr}module " . $module . " (\n";
+
+            my $conndb = $self->{vp3}{vp3}{connectivity}{$module};
+            my $comma = "  ";
+            for my $ident (sort $conndb->signals) {
+                my $signal_obj = $conndb->signal ($ident);
+                my $symtab_entry = $self->{module}->symtab->lookup ($ident);
+                my %decl = $signal_obj->implicit_declaration_type;
+
+                # The behavior of @Module is different in v2k and non-v2k mode, as
+                # described in the documentation. In v2k mode, @Module only
+                # generates inferred ports (hence we condition on
+                # implicit_declaration_type specifying input or output). In non-v2k
+                # mode, we generated explicit and inferred ports, so generation is
+                # conditioned on actual connectivity.
+                if ($target->v2k && !$symtab_entry && ($decl{input} || $decl{output})) {
+                    my $dir   = $decl{input} ? "input"  : "output";
+                    my $src   = $decl{input} ? "source" : "sink"  ;
+                    my $type  = $decl{reg}   ? "reg"    : "wire"  ;
+                    my $range = $signal_obj->implicit_declaration_range;
+
+                    $output .= "${indent}    ${comma}${dir} ${type} ${range} ${ident}\n";
+                    $comma = ", ";
+
+                    # Inserting in symbol table here prevents a duplicate
+                    # declaration by @Regs/@Wires
+                    $self->{module}->symtab->insert ($ident => $dir);
+                    my $conn = VP3::Connectivity->new (undef, $dir, $src);
+                    $signal_obj->add_connectivity ($conn);
+                } elsif (!$target->v2k &&
+                         ($signal_obj->input_connection ||
+                          $signal_obj->output_connection)) {
+                    $output .= "${indent}    ${comma}${ident}\n";
+                    $comma = ", ";
+                }
+            }
+
+            $output .= "${indent});\n";
+
+            my ($error);
+            $tree = $self->parse ("VP3_PARSE_MODE_MODULE_HEADER", $output, \$error)
+                or die "While parsing generated module header:\n$error\nHeader follow:\n$output";
+
+            $tree->prepend ($dtext);
         }
-
-        $output .= "${indent});\n";
-
-        my ($tree, $error);
-        $tree = $self->parse ("VP3_PARSE_MODE_MODULE_HEADER", $output, \$error)
-            or die "While parsing generated module header:\n$error\nHeader follow:\n$output";
 
         $tree->location_set_recursive ($target->directive_keyword->source_file,
                                        $target->directive_keyword->source_line);
 
-        $tree->prepend ($dtext);
+        $tree;
     }
 
 } # package VP3::Translator
@@ -3591,7 +3606,7 @@ sub VP3::Preprocessor::standard::_eval
     use Carp;
 
     use constant {
-        ST_INIT         => 0,
+        ST_INSERT       => 0,
         ST_DEFAULT      => 1,
         ST_COMMENT      => 2,
         ST_DIRECTIVE    => 3,
@@ -3882,13 +3897,13 @@ sub VP3::Preprocessor::standard::_eval
             line            => 0,
             ws_text         => "",
             ws_toks         => [ ],
-            state           => ST_INIT,
+            state           => ST_INSERT,
             states          => [ ],
             #start_of_line   => 0,
             ifdefs          => VP3::Conditionals->new,
             defines         => { },
             includes        => [ ],
-            parse_mode      => $parse_mode,
+            insert_toks     => [ $parse_mode ],
         };
         return bless $self, $class;
     }
@@ -3927,9 +3942,12 @@ sub VP3::Preprocessor::standard::_eval
 
         while (1) {
 
-            if ($self->{state} == ST_INIT) {
-                $self->{state} = ST_DEFAULT;
-                return ($self->{parse_mode}, undef);
+            if ($self->{state} == ST_INSERT) {
+                my $tok = shift @{$self->{insert_toks}};
+                if (!@{$self->{insert_toks}}) {
+                    $self->{state} = ST_DEFAULT;
+                }
+                return ($tok, undef);
             } elsif ($self->{state} == ST_EOF) {
                 return ('', undef);
             }
@@ -5093,8 +5111,8 @@ BEGIN {
             # not had their dependencies recorded and might not be found if
             # they were independently sought using only library specifications
             # # (-v and -y) from the command line.
-            is_opp => '$', 
-                                  
+            is_opp => '$',
+
             # Source file from which we parsed the module. Unset if the module
             # is from the current file.
             source_file => '$',
@@ -5410,13 +5428,14 @@ sub analyze
 
         for my $modname (@leaves) {
             my $modref = $vdb->module_ref ($modname);
+            my $validate = !($$modref->typeis ("vp3_module_declaration") && $$modref->vp3_module_directive->opt_none);
             my $xlate;
 
             # Expand @Instance
             $xlate = VP3::Expander->new ($self);
             $$modref = $xlate->visit ($$modref);
 
-            $debug && print STDERR "Analyzing ", $modname;
+            $debug && print STDERR "Analyzing ", $modname, "\n";
             $conn_db = VP3::ConnectivityAnalyzer::analyze ($self, $$modref);
             $self->{vp3}{connectivity}{$modname} = $conn_db;
 
@@ -5428,8 +5447,16 @@ sub analyze
             $xlate = VP3::Translator->new ($self);
             $$modref = $xlate->visit ($$modref);
 
-            $debug && print STDERR "Validating connectivity in ", $modname;
-            $self->{vp3}{connectivity}{$modname}->validate;
+            #print STDERR "*** BEGIN translated parse tree ***\n";
+            #print STDERR Dumper ($$modref);
+            #print STDERR "*** END translated parse tree ***\n";
+
+            if ($validate) {
+                $debug && print STDERR "Validating connectivity in ", $modname, "\n";
+                $self->{vp3}{connectivity}{$modname}->validate;
+            } else {
+                $debug && print STDERR "Not validating connectivity in module generated with -none\n";
+            }
 
             #print Dumper ($modref);
 
@@ -5588,7 +5615,7 @@ sub add_module_to_cache
 # This function is often called twice for instantiated modules, once when
 # expanding the @Instance directive, and again when doing connectivity
 # analysis. For @Instance, the file to read may be specified manually with
-# -file, but that information doesn't propagate to the connectivity analyzer. 
+# -file, but that information doesn't propagate to the connectivity analyzer.
 
 sub ports
 {
@@ -5755,7 +5782,7 @@ sub process
         $self->output_depends;
     } else {
         my $tmp = $self->generate_verilog;
-        
+
         if ($analyze_result) {
             $self->output_verilog ($tmp->filename);
         } else {

@@ -1,0 +1,8 @@
+@Module -none;
+
+@Regs;
+@Wires;
+
+@Instance syntax_sub u;
+
+initial test_reg = 0;
