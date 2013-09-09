@@ -22,6 +22,7 @@ module preprocessor_ep3 (
     , m2val
     , q
     , s
+    , vexpr
 );
 
 //|@Ports ;
@@ -31,9 +32,50 @@ output  m1val;
 input  m2val;
 output  q;
 input  s;
+output  vexpr;
 
   assign q = s ? b : a;
 
   assign m1val = m2val;
+
+assign vexpr = 4;
+
+/*
+
+$VAR1 = bless( {
+                 'output_scalar' => bless( {
+                                             'lsb' => undef,
+                                             'msb' => undef,
+                                             'name' => 'output_scalar',
+                                             'dir' => 2
+                                           }, 'VP3::Port' ),
+                 'output_vector' => bless( {
+                                             'lsb' => '0',
+                                             'msb' => '9',
+                                             'name' => 'output_vector',
+                                             'dir' => 2
+                                           }, 'VP3::Port' ),
+                 '!location' => 'ports.v:1',
+                 'input_scalar' => bless( {
+                                            'lsb' => undef,
+                                            'msb' => undef,
+                                            'name' => 'input_scalar',
+                                            'dir' => 1
+                                          }, 'VP3::Port' ),
+                 '!list' => [
+                              $VAR1->{'input_scalar'},
+                              bless( {
+                                       'lsb' => '0',
+                                       'msb' => '9',
+                                       'name' => 'input_vector',
+                                       'dir' => 1
+                                     }, 'VP3::Port' ),
+                              $VAR1->{'output_scalar'},
+                              $VAR1->{'output_vector'}
+                            ],
+                 'input_vector' => $VAR1->{'!list'}[1]
+               }, 'VP3::Ports' );
+
+*/
 
 endmodule

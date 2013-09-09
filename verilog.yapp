@@ -1890,6 +1890,7 @@ vp3_parse_start:   VP3_PARSE_MODE_SOURCE_TEXT   source_text               EOF { 
                  | VP3_PARSE_MODE_MODULE_ITEMS  opt_module_items          EOF { $_[2]->append_text ($_[3]) }
                  | VP3_PARSE_MODE_MODULE_HEADER traditional_module_header EOF { $_[2]->append_text ($_[3]) }
                  | VP3_PARSE_MODE_MODULE_HEADER v2k_module_header         EOF { $_[2]->append_text ($_[3]) }
+                 | VP3_PARSE_MODE_EXPRESSION    expression                EOF { $_[2]->append_text ($_[3]) }
                  ;
 
 # directives

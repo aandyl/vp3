@@ -384,6 +384,54 @@ applied only to the matching part.
 
 =back
 
+=head1 PERL FUNCTIONS
+
+VP3 provides some functions which may be used by user Perl code running in
+C<@perl_begin>/C<@perl_end> sections.
+
+=over 4
+
+=item vexpr
+
+Usage:
+
+  vexpr ("verilog expression")
+
+Example:
+
+  vexpr ("2 + 2")
+  // Returns 4
+
+The C<vexpr> function allows user code to call VP3's expression evaluation
+engine.
+
+=item vports
+
+Usage:
+
+  vports ("module")
+
+The C<vports> function searches for the specified module using the same search
+locations that would be used for a C<@Instance> directive, parses it, and
+returns a list of the ports of the module. The return value is a C<VP3::Ports>
+object.
+
+=item vprint
+
+Usage:
+
+  vprint (list)
+
+This function prints the provided arguments into the intermediate Verilog. Text
+inserted in will be seen by the later phases of VP3 processing. This means that
+it is possible to emit, for example, VP3 C<@Instance> directives.
+
+This function is provided only under the built-in preprocessor. When using the
+ep3 preprocessor, C<print> should be used instead. The built-in preprocessor
+preserves C<print> as a means of printing text to the console.
+
+=back
+
 =head1 BUGS
 
 This is alpha-quality software and bugs are to be expected. Please report bugs
@@ -4467,6 +4515,56 @@ sub VP3::Preprocessor::standard::_eval
 } # package VP3::Lexer
 
 {
+    package VP3::UserFunctions;
+
+    my (@list) = qw(vexpr vports);
+
+    sub install
+    {
+        my ($where) = $_[0];
+
+        no strict 'refs';
+
+        for my $f (@list) {
+            *{$where . '::' . $f} = sub { $f->(${$where . '::vp3'}, @_) };
+        }
+    }
+
+    sub vexpr {
+        my $vp3 = shift;
+        my $text = join (" ", @_);
+
+        my $mod = VP3::ParseTree->factory ("module_declaration");
+
+        my $p = VP3::Parser->new;
+        $p->scope ($mod);
+        $p->YYData->{lexer} = VP3::Lexer->new ("VP3_PARSE_MODE_EXPRESSION");
+
+        open (my $fh, "<", \$text)
+            or VP3::fatal ("unable to open string as a filehandle: $!");
+        $p->YYData->{lexer}->input ($fh, undef);
+
+        my $expr = $p->YYParse (
+            yylex   => sub { $_[0]->YYData->{lexer}->lex (@_[1..$#_]) },
+            yyerror => \&VP3::Parser::default_yyerror,
+        );
+
+        if (!$expr) {
+            VP3::error ("parse error in vexpr: " . $p->YYData->{error});
+            return "";
+        }
+
+        VP3::Expression::evaluate ($mod, $expr);
+    }
+
+    sub vports {
+        my $vp3 = shift;
+        $vp3->ports (@_);
+    }
+
+}
+
+{
     package VP3::Preprocessor::standard;
 
     use IO::File;
@@ -4510,7 +4608,7 @@ sub VP3::Preprocessor::standard::_eval
 
     sub new
     {
-        my ($class) = shift;
+        my ($class, $vp3) = @_;
 
         my $pkg_name  = "VP3::Preprocessor::standard::GEN" . $package_counter++;
 
@@ -4534,6 +4632,10 @@ sub VP3::Preprocessor::standard::_eval
         *{$self->{pkg_name} . '::vprint'} = sub {
             print { $self->{output} } @_;
         };
+
+        ${$self->{pkg_name} . '::vp3'} = $vp3;
+
+        VP3::UserFunctions::install ($self->{pkg_name});
 
         $self;
     }
@@ -4996,14 +5098,17 @@ sub VP3::Preprocessor::standard::_eval
         eval "sub Text::EP3::$_ { print \$_[1] }";
     }
 
+    VP3::UserFunctions::install ("Text::EP3");
+
     sub new
     {
         require Text::EP3;
 
-        my ($class) = shift;
+        my ($class, $vp3) = @_;
         my $self = {
             ep3 => Text::EP3->new,
             defines => [ ],
+            vp3 => $vp3,
         };
         bless $self, $class;
     }
@@ -5032,6 +5137,9 @@ sub VP3::Preprocessor::standard::_eval
     sub process
     {
         my ($self, $args) = @_;
+
+        no warnings 'once';
+        local $Text::EP3::vp3 = $self->{vp3};
 
         if ($self->{depends_mode}) {
             my $depends_output = File::Temp->new;
@@ -5736,7 +5844,7 @@ sub process
     my $pp_class = "VP3::Preprocessor::" . $self->{preprocessor};
     $pp_class->can ("new") or VP3::error_fatal ("unknown preprocessor " . $self->{preprocessor});
 
-    my $pp = $pp_class->new or die "Failed to create preprocessor object";
+    my $pp = $pp_class->new ($self) or die "Failed to create preprocessor object";
 
     $pp->depends_mode ($self->{depends_mode});
     $pp->includes (@{$self->{pp_includes}});

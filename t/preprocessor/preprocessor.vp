@@ -23,4 +23,15 @@
 
   assign MACRO1 = MACRO2;
 
+  @perl_begin
+    vprint ("assign vexpr = " . vexpr ("2 + 2") . ";\n");
+
+    use Data::Dumper;
+
+    vprint "\n";
+    vprint "/*\n\n";
+    vprint Dumper (vports ("ports"));
+    vprint "\n*/\n";
+  @perl_end
+
 endmodule
