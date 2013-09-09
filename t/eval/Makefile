@@ -4,6 +4,7 @@ default: all
 
 FILES := \
 paramports.v \
+vexpr.v \
 
 # Build options
 
