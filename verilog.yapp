@@ -1,5 +1,8 @@
 %{
 
+    use VP3::Lexer;
+    use VP3::ParseTree;
+
     # Shortcut to VP3::ParseTree::factory for use in semantic actions
     *f = \&VP3::ParseTree::factory;
 

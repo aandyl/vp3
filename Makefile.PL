@@ -16,7 +16,21 @@ WriteMakefile(
     },
     # Needed to suppress POD for Parser.pm. The default for files that don't
     # exist at POD scan time is to assume they have POD.
-    PM                  => { 'Parser.pm' => File::Spec->catfile ('$(INST_LIBDIR)', 'VP3', 'Parser.pm') },
+    #PM                  => { 'Parser.pm' => File::Spec->catfile ('$(INST_LIBDIR)', 'VP3', 'Parser.pm') },
+    # Not sure how to use PMLIBDIRS for auto file scanning and also tell
+    # MakeMaker about the generated Parser.pm
+    PM                  => { 'VP3.pm' => 'blib/lib/VP3.pm',
+                             'VP3/Parser.pm' => 'blib/lib/VP3/Parser.pm',
+                             'VP3/Expression.pm' => 'blib/lib/VP3/Expression.pm',
+                             'VP3/Lexer.pm' => 'blib/lib/VP3/Lexer.pm',
+                             'VP3/ParseTree.pm' => 'blib/lib/VP3/ParseTree.pm',
+                             'VP3/ParseTreeMutator.pm' => 'blib/lib/VP3/ParseTreeMutator.pm',
+                             'VP3/ParseTreeVisitor.pm' => 'blib/lib/VP3/ParseTreeVisitor.pm',
+                             'VP3/RTLTool.pm' => 'blib/lib/VP3/RTLTool.pm',
+                             'VP3/RTLTool/Connectivity.pm' => 'blib/lib/VP3/RTLTool/Connectivity.pm',
+                             'VP3/RTLTool/Preprocessor.pm' => 'blib/lib/VP3/RTLTool/Preprocessor.pm' },
+
+    #PMLIBDIRS           => [ 'VP3' ],
     MAN3PODS            => { },
     EXE_FILES           => [ 'vp3' ],
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
@@ -32,7 +46,7 @@ MAKE_FRAG
 
 sub postamble {
     return <<'MAKE_FRAG';
-Parser.pm: verilog.yapp
+VP3/Parser.pm: verilog.yapp
 	$(YAPP_PREFIX)/bin/yapp -m VP3::Parser -o $@ $<
 MAKE_FRAG
 }

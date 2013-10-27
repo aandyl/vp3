@@ -1,7 +1,7 @@
 .PRECIOUS: %.v %.deps
 
 VP3 := ../../blib/script/vp3
-VP3_DEPS := $(VP3) Makefile ../rules.make
+VP3_DEPS := $(VP3) Makefile ../rules.make ../../blib/lib/VP3.pm ../../blib/lib/VP3/*.pm ../../blib/lib/VP3/RTLTool/*.pm
 
 .PRECIOUS: %.run_vp3
 %.run_vp3: %.vp $(VP3_DEPS)
