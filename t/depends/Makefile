@@ -16,6 +16,8 @@ dep3.v \
 chameleon.v \
 chameleon2.v \
 chameleon_mods.v \
+scope.v \
+scope_ep3.v \
 
 # Build options
 
@@ -33,6 +35,8 @@ VP3_OPTS.chameleon2 := -v chameleon_mods.v
 
 dep1_ep3.run_vp3 : VP3_OPTS += -p ep3
 
+scope_ep3.run_vp3 : VP3_OPTS += -p ep3
+
 # What to compile
 
 TOP :=
@@ -43,6 +47,9 @@ chameleon2.vp : chameleon.vp
 	cp $< $@
 
 dep1_ep3.vp: dep1.vp
+	cp $< $@
+
+scope_ep3.vp: scope.vp
 	cp $< $@
 
 # Dependencies

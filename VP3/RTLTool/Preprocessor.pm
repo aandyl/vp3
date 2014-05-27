@@ -584,32 +584,57 @@
         if ($self->{depends_mode}) {
             my $depends_output = File::Temp->new;
 
-            $self->{ep3}->ep3_gen_depend_list (1);
-            $self->{ep3}->ep3_output_file ($depends_output->filename);
-            @{$self->{ep3}->{Defines}} = @{$self->{defines}};
-            $self->{ep3}->ep3_defines;
-            my $result = eval { $self->{ep3}->ep3_process ($args->{input}); };
+            # In depends mode, run ep3 twice: once to get the dependencies, and
+            # again to get the output. Need to run the depends pass in a
+            # subprocess so the second pass has a clean namespace.
+            my $pid = fork;
 
-            if (!defined ($result)) {
-                chomp $@;
-                VP3::error ("EP3 error: $@");
+            unless (defined ($pid)) {
+                VP3::error_fatal ("Failed to fork: $!");
             }
 
-            # Need to force ep3 to flush and close the file so we get all the
-            # dependencies
-            $self->{ep3}->ep3_output_file ("STDOUT");
+            if (!$pid) {
+                # Child
 
-            open (my $fh, "<", $depends_output)
-                or VP3::error_fatal ("Failed to open ep3 depends output: $!");
+                $depends_output->unlink_on_destroy (0);
 
-            chomp (@{$self->{depends}} = <$fh>);
+                $self->{ep3}->ep3_gen_depend_list (1);
+                $self->{ep3}->ep3_output_file ($depends_output->filename);
+                @{$self->{ep3}->{Defines}} = @{$self->{defines}};
+                $self->{ep3}->ep3_defines;
+                my $result = eval { $self->{ep3}->ep3_process ($args->{input}); };
 
-            if (!defined ($result)) {
-                return undef;
+                if (!defined ($result)) {
+                    chomp $@;
+                    print STDERR "EP3 error: $@";
+                    exit 1;
+                }
+
+                # The following can be used when running ep3 in-process to
+                # force it to flush and close the file so we get all the
+                # dependencies.
+                #$self->{ep3}->ep3_output_file ("STDOUT");
+
+                exit 0;
+            } else {
+                # Parent
+
+                if (wait() == -1) {
+                    VP3::error_fatal ("Should have a child process here.");
+                }
+
+                my $result = $?;
+
+                open (my $fh, "<", $depends_output)
+                    or VP3::error_fatal ("Failed to open ep3 depends output: $!");
+
+                chomp (@{$self->{depends}} = <$fh>);
+
+                if ($?) {
+                    return undef;
+                }
+
             }
-
-            $self->{ep3}->ep3_reset;
-            $self->{ep3}->ep3_gen_depend_list (undef);
         }
 
         $self->{ep3}->ep3_output_file ($args->{output});

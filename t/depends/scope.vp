@@ -1,0 +1,5 @@
+@perl_begin
+    # Make sure variables don't stay in scope across passes.
+    die "\$var should not be defined here" if $var;
+    $var = 1;
+@perl_end
