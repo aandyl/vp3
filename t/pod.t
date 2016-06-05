@@ -10,4 +10,4 @@ if ($@) {
     plan tests => 1;
 }
 
-pod_file_ok ("vp3", "Valid POD in vp3");
+pod_file_ok ("bin/vp3", "Valid POD in vp3");
