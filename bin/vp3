@@ -508,7 +508,14 @@ our ($VERSION) = "0.1.66";
 
 ######################################################################
 
-use VP3::RTLTool;
+BEGIN {
+    # Support local installs, but don't mess up @INC unnecessarily.
+    eval { use VP3::RTLTool; } or do {
+        use FindBin;
+        use lib "$FindBin::Bin/../lib";
+        use VP3::RTLTool;
+    }
+}
 
 my $rt = VP3::RTLTool->new (@ARGV);
 
