@@ -21,7 +21,7 @@ my $unparsed = qr/\@Unparsed/;
 
 # These tokens introduce directives containing arbitrary text, terminated by a ;
 # Upon encountering a token in this list, the lexer will slurp text up to the next ;
-my $dtok = sub { my $x = join ("|", map { quotemeta $_ } @_); qr/(?:$x)(?=[^\w\$])/ }->(
+my $dtok = sub { my $x = join ("|", map { quotemeta $_ } @_); qr/(?:$x)(?![\w\$])/ }->(
     '@Module',
     '@Instance',
 );
@@ -80,10 +80,9 @@ my $otok = sub { my $x = join ("|", map { quotemeta $_ } @_); qr/(?:$x)/ }->(
     '=',
 );
 
-# Keyword tokens. Recognized only when followed by a non-identifier
-# character (which may be a newline), so that we don't identify something
-# like "edge_count" as a keyword.
-my $ktok = sub { my $x = join ("|", map { quotemeta $_ } @_); qr/(?:$x)(?=[^\w\$])/ }->(qw(
+# Keyword tokens. Recognized only when not followed by an identifier character,
+# so that we don't identify something like "edge_count" as a keyword.
+my $ktok = sub { my $x = join ("|", map { quotemeta $_ } @_); qr/(?:$x)(?![\w\$])/ }->(qw(
     @Ports
     @Regs
     @Wires

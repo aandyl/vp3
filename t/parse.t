@@ -1,15 +1,52 @@
 use strict;
 use warnings FATAL => qw(all);
 
-use Test::Simple tests => 2;
+use Test::More tests => 3;
 
 use VP3;
 
-my $v = VP3->new (library_dirs => [ 't/preprocessor' ]);
+my ($code, $fh, $p, $error);
 
-open my $fh, "t/preprocessor/ports.v" or die "open: $!";
+my $v = VP3->new ();
 
-my $p = $v->parse ($fh, 'ports.v', 'ports');
+######################################################################
+#
+# Test that we can invoke the parser standalone.
 
-ok (defined ($p));
-ok ($p->isa ('VP3::ParseTree'));
+open $fh, "t/preprocessor/ports.v" or die "open: $!";
+
+$p = $v->parse ($fh, 'ports.v', 'ports');
+
+ok (defined ($p) && $p->isa ('VP3::ParseTree'))
+    or diag ($error);
+
+######################################################################
+#
+# File with no trailing whitespace
+
+$code = "module test();endmodule";
+
+open $fh, '<', \$code or die "open: $!";
+
+$p = $v->parse ($fh, 'test.v', 'test', undef, \$error);
+
+ok (defined ($p) && $p->isa ('VP3::ParseTree'))
+    or diag ($error);
+
+######################################################################
+#
+# Macro containing a single identifier
+# (macro is parsed as a distinct input stream, so end of macro looks like EOF)
+
+$code = <<END;
+`define ENDMODULE endmodule
+module test ();
+`ENDMODULE
+END
+
+open $fh, '<', \$code or die "open: $!";
+
+$p = $v->parse ($fh, 'test.v', 'test', undef, \$error);
+
+ok (defined ($p) && $p->isa ('VP3::ParseTree'))
+    or diag ($error);
