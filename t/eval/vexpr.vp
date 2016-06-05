@@ -7,6 +7,9 @@
     vprint vexpr ("'d4294967295"), "\n";
     vprint vexpr ("'b111100001010"), "\n";
     vprint vexpr ("'o70"), "\n";
+    vprint vexpr ("2 * 2"), "\n";
+    vprint vexpr ("3 - 2"), "\n";
+    vprint vexpr ("4 / 2"), "\n";
     #vprint vexpr ("'d4294967296"), "\n";
 
     vprint "*/\n";

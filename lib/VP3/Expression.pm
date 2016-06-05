@@ -65,6 +65,8 @@ sub eval_based_number
 
 sub eval_binary_operator_expression
 {
+    use integer;
+
     my ($scope, $binop) = @_;
 
     my $lval = evaluate ($scope, $binop->left);
@@ -77,6 +79,7 @@ sub eval_binary_operator_expression
     $op eq '+' && return $lval + $rval;
     $op eq '-' && return $lval - $rval;
     $op eq '*' && return $lval * $rval;
+    $op eq '/' && return $lval / $rval;
 
     die "Binary op $op not supported for expression evaluation";
 }
